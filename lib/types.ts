@@ -471,6 +471,219 @@ export const questionsResponseSchema = z.object({
 /** Forma única de los errores de la API. `error` se muestra tal cual. */
 export type ApiError = { error: string };
 
+// ---------------------------------------------------------------------------
+// Autoría de preguntas (panel de admin)
+//
+// El mismo schema corre en el formulario y en el endpoint. Además de las formas,
+// valida la coherencia entre `payload` y `answer`: que la opción correcta exista,
+// que el orden sea una permutación de los ítems, que el valor del slider esté
+// dentro del rango. Una pregunta incoherente pasa la validación de forma pero
+// rompe la partida, y se carga el día anterior a la clase.
+// ---------------------------------------------------------------------------
+
+export const MIN_CHOICES = 2;
+export const MAX_CHOICES = 6;
+
+const authoringCommon = {
+  prompt: z.string().trim().min(1, "Escribí el enunciado."),
+  hint: z
+    .string()
+    .trim()
+    .max(300, "La explicación no puede pasar de 300 caracteres.")
+    .nullable(),
+  points: z
+    .number()
+    .int()
+    .min(0)
+    .max(10000, "El puntaje máximo es 10000."),
+  time_limit: z
+    .number()
+    .int()
+    .min(5, "El tiempo mínimo es 5 segundos.")
+    .max(300, "El tiempo máximo es 300 segundos."),
+  is_active: z.boolean(),
+};
+
+const choicesSchema = z
+  .array(optionSchema)
+  .min(MIN_CHOICES, `Tenés que cargar al menos ${MIN_CHOICES} opciones.`)
+  .max(MAX_CHOICES, `No puede haber más de ${MAX_CHOICES} opciones.`);
+
+const questionInputUnion = z.discriminatedUnion("type", [
+  z.object({
+    ...authoringCommon,
+    type: z.literal("single"),
+    payload: z.object({ choices: choicesSchema }),
+    answer: singleAnswerSchema,
+  }),
+  z.object({
+    ...authoringCommon,
+    type: z.literal("multiple"),
+    payload: z.object({ choices: choicesSchema }),
+    answer: multipleAnswerSchema,
+  }),
+  z.object({
+    ...authoringCommon,
+    type: z.literal("truefalse"),
+    payload: truefalsePayloadSchema,
+    answer: truefalseAnswerSchema,
+  }),
+  z.object({
+    ...authoringCommon,
+    type: z.literal("order"),
+    payload: orderPayloadSchema,
+    answer: orderAnswerSchema,
+  }),
+  z.object({
+    ...authoringCommon,
+    type: z.literal("match"),
+    payload: matchPayloadSchema,
+    answer: matchAnswerSchema,
+  }),
+  z.object({
+    ...authoringCommon,
+    type: z.literal("slider"),
+    payload: sliderPayloadSchema,
+    answer: sliderAnswerSchema,
+  }),
+  z.object({
+    ...authoringCommon,
+    type: z.literal("text"),
+    payload: textPayloadSchema,
+    answer: textAnswerSchema,
+  }),
+]);
+
+const hasDuplicates = (values: string[]) => new Set(values).size !== values.length;
+
+export const questionInputSchema = questionInputUnion.superRefine((q, ctx) => {
+  const fail = (message: string, path: (string | number)[]) =>
+    ctx.addIssue({ code: "custom", message, path });
+
+  switch (q.type) {
+    case "single": {
+      const ids = q.payload.choices.map((choice) => choice.id);
+      if (hasDuplicates(ids)) fail("Hay opciones con el mismo id.", ["payload"]);
+      if (!ids.includes(q.answer.choiceId)) {
+        fail("Marcá cuál es la opción correcta.", ["answer", "choiceId"]);
+      }
+      break;
+    }
+
+    case "multiple": {
+      const ids = q.payload.choices.map((choice) => choice.id);
+      if (hasDuplicates(ids)) fail("Hay opciones con el mismo id.", ["payload"]);
+      if (q.answer.choiceIds.length === 0) {
+        fail("Marcá al menos una opción correcta.", ["answer", "choiceIds"]);
+      }
+      if (hasDuplicates(q.answer.choiceIds)) {
+        fail("Hay una opción correcta repetida.", ["answer", "choiceIds"]);
+      }
+      if (q.answer.choiceIds.some((id) => !ids.includes(id))) {
+        fail("Hay una opción correcta que ya no existe.", ["answer", "choiceIds"]);
+      }
+      break;
+    }
+
+    case "order": {
+      const ids = q.payload.items.map((item) => item.id);
+      if (hasDuplicates(ids)) fail("Hay ítems con el mismo id.", ["payload"]);
+      // El orden correcto tiene que usar todos los ítems, exactamente una vez.
+      const sameLength = q.answer.order.length === ids.length;
+      const samePermutation =
+        sameLength &&
+        !hasDuplicates(q.answer.order) &&
+        q.answer.order.every((id) => ids.includes(id));
+      if (!samePermutation) {
+        fail(
+          "El orden correcto tiene que incluir todos los ítems una sola vez.",
+          ["answer", "order"],
+        );
+      }
+      break;
+    }
+
+    case "match": {
+      const leftIds = q.payload.left.map((item) => item.id);
+      const rightIds = q.payload.right.map((item) => item.id);
+      if (hasDuplicates(leftIds) || hasDuplicates(rightIds)) {
+        fail("Hay ítems con el mismo id.", ["payload"]);
+      }
+      const pairKeys = Object.keys(q.answer.pairs);
+      if (pairKeys.length !== leftIds.length) {
+        fail("Cada ítem de la izquierda tiene que tener su par.", [
+          "answer",
+          "pairs",
+        ]);
+      }
+      if (pairKeys.some((id) => !leftIds.includes(id))) {
+        fail("Hay un par que apunta a un ítem de la izquierda que no existe.", [
+          "answer",
+          "pairs",
+        ]);
+      }
+      if (
+        Object.values(q.answer.pairs).some((id) => !rightIds.includes(id))
+      ) {
+        fail("Hay un par que apunta a un ítem de la derecha que no existe.", [
+          "answer",
+          "pairs",
+        ]);
+      }
+      break;
+    }
+
+    case "slider": {
+      const { min, max, step } = q.payload;
+      if (min >= max) {
+        fail("El mínimo tiene que ser menor que el máximo.", ["payload", "min"]);
+      }
+      if (step <= 0) fail("El paso tiene que ser mayor que 0.", ["payload", "step"]);
+      if (q.answer.value < min || q.answer.value > max) {
+        fail("El valor correcto tiene que estar dentro del rango.", [
+          "answer",
+          "value",
+        ]);
+      }
+      if (q.answer.tolerance > max - min) {
+        fail("La tolerancia es más grande que todo el rango.", [
+          "answer",
+          "tolerance",
+        ]);
+      }
+      break;
+    }
+
+    case "text": {
+      const cleaned = q.answer.accepted.map((value) => value.trim()).filter(Boolean);
+      if (cleaned.length === 0) {
+        fail("Cargá al menos una respuesta aceptada.", ["answer", "accepted"]);
+      }
+      if (hasDuplicates(cleaned.map((value) => value.toLowerCase()))) {
+        fail("Hay respuestas aceptadas repetidas.", ["answer", "accepted"]);
+      }
+      break;
+    }
+
+    case "truefalse":
+      break;
+  }
+});
+
+export type QuestionInput = z.infer<typeof questionInputSchema>;
+
+/** Body de `PATCH /api/admin/questions/reorder`. */
+export const reorderSchema = z.object({
+  ids: z.array(z.uuid()).min(1),
+});
+
+/** Body de `POST /api/admin/questions/import`. */
+export const importSchema = z.object({
+  questions: z.array(questionInputSchema).min(1, "El archivo no tiene preguntas."),
+  /** true reemplaza todo; false agrega al final. */
+  replace: z.boolean(),
+});
+
 /**
  * Lo que se manda cuando se acaba el tiempo sin responder.
  *

@@ -128,6 +128,11 @@ Por tipo de pregunta, `payload` es lo que ve el jugador, `answer` la respuesta c
 | `POST /api/answer` | `{ playerId, questionId, response, elapsedMs }` → corrige y puntúa |
 | `GET /api/ranking` | la tabla ordenada. Con `?tv=1` ignora `reveal_ranking` |
 | `/ranking` | ranking (`components/RankingScreen.tsx`). `?tv=1` = modo proyector |
+| `/admin/login` | única ruta de `/admin/*` abierta |
+| `/admin` | control de partida, contadores en vivo y QR |
+| `/admin/preguntas` | CRUD, reordenar, vista previa, exportar/importar |
+| `/admin/respuestas` | qué respondió cada jugador, filtrable por pregunta |
+| `/api/admin/*` | todo detrás del middleware |
 
 `/api/join` es **idempotente por apodo**: si el `nickname_key` ya existe devuelve
 ese mismo jugador en vez de fallar. Alguien que recarga, se queda sin batería o
@@ -385,13 +390,53 @@ activas, el gate de `reveal_ranking` con y sin `tv=1`, que con la partida termin
 vea igual, y que `me.rank` de `/api/state` coincida con la posición del ranking. Datos
 de prueba borrados después.
 
+### Paso 8 — Panel de admin ✅
+
+- **Autenticación**: `POST /api/admin/login` compara la contraseña en tiempo constante
+  (se comparan los digests SHA-256, no los textos, así ni el tiempo ni el largo dicen
+  nada) y setea una cookie httpOnly / sameSite lax firmada con HMAC-SHA256 usando la
+  misma `ADMIN_PASSWORD` como clave. Dura 12 h y no hay estado en la base: el token es
+  `vencimiento.firma` y se valida solo.
+- **`lib/adminAuth.ts` usa Web Crypto y no `node:crypto`**, porque el middleware corre en
+  el runtime Edge. No importa `server-only` por el mismo motivo; no hay riesgo porque
+  Next solo inyecta al bundle del cliente las variables `NEXT_PUBLIC_*`.
+- `middleware.ts` protege `/admin/*` (menos el login) y `/api/admin/*`. Las páginas
+  redirigen al login guardando a dónde iban; los endpoints devuelven 401.
+- **Sin `ADMIN_PASSWORD` configurada el panel no abre**, ni siquiera con la contraseña
+  correcta: es preferible un panel inaccesible a uno abierto.
+- El **reset borra jugadores y respuestas pero NO las preguntas**: reiniciar la partida no
+  puede significar perder el TP. Pide escribir `BORRAR`, y la confirmación se valida
+  también en el servidor.
+- **`questionInputSchema` valida coherencia, no solo forma**: que la opción correcta
+  exista, que el orden sea una permutación de los ítems, que cada par apunte a ítems que
+  existen, que el valor del slider caiga dentro del rango. Corre igual en el formulario y
+  en el endpoint, así que no hay dos definiciones que se puedan desincronizar. El import
+  de JSON pasa por el mismo schema y **se rechaza entero** si una pregunta está mal.
+- La **vista previa usa los mismos componentes** que ve el estudiante (`QuestionRenderer`
+  dentro de `QuestionShell`), no una maqueta aparte.
+- `GET /api/admin/questions` es el **único** endpoint que devuelve `answer`, y está detrás
+  del middleware. Devuelve también las preguntas mal formadas, marcadas: si se ocultaran,
+  no se podría arreglar justamente la que está rota.
+- **Barajado** (`lib/shuffle.ts`): `/api/questions` baraja los ítems de `order` y la
+  columna derecha de `match` antes de sacar `answer`. Sin esto, `order` mostraba los pasos
+  en el orden correcto, que es regalar la respuesta. Reintenta si el barajado cae justo en
+  el orden correcto.
+
+Probado de punta a punta contra la base real (30 verificaciones): que sin sesión todo dé
+401 o redirija, que la cookie no se pueda falsificar (firma inventada, vencimiento
+estirado, token vencido), el CRUD con sus validaciones cruzadas, el reorder, que el admin
+vea `answer` y el jugador no, que 20 de 20 pedidos de `order` vengan barajados, el
+import/export, el control de partida y el reset. Datos de prueba borrados después.
+
 ### Pendiente
 
 - [x] ~~Ejecutar `supabase/schema.sql` y cargar las env vars reales.~~ Hecho y verificado
       contra la base: las 4 tablas con todas sus columnas, la fila `game_state` id=1 con
       sus defaults, los check de `type` y de `id = 1`, y el unique de `nickname_key`.
 - [x] ~~Borrar `app/styleguide/`.~~ Hecho. `/styleguide` devuelve 404.
-- [ ] **Panel de admin.** Es lo único que falta para poder correr la clase: hoy no hay
-      forma de pasar `game_state.status` a `running` ni a `finished` salvo por SQL a mano.
+- [x] ~~Panel de admin.~~ Hecho. Ya se puede abrir, iniciar y cerrar la partida desde
+      `/admin`, sin tocar SQL.
 - [ ] Cargar las preguntas reales del TP en `questions` (la tabla está vacía).
-- [ ] Ninguna pantalla se probó con ojos en un navegador. Falta esa pasada.
+- [ ] **Ninguna pantalla se probó con ojos en un navegador.** Todo se verificó por API y
+      por HTML servido. Falta esa pasada antes de la clase.
+- [ ] Ensayo general: abrir la partida, jugar desde dos celulares y proyectar el ranking.

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { shuffleForPlayer } from "@/lib/shuffle";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import {
   questionSchema,
@@ -63,7 +64,8 @@ export async function GET() {
         );
         continue;
       }
-      questions.push(toPublicQuestion(parsed.data));
+      // Se baraja ANTES de sacar `answer`, para no devolver justo el orden correcto.
+      questions.push(toPublicQuestion(shuffleForPlayer(parsed.data)));
     }
 
     return NextResponse.json(
