@@ -209,6 +209,8 @@ npm run start       # servir el build
 npm run lint        # ESLint
 npm test            # tests unitarios (vitest, una pasada)
 npm run test:watch  # vitest en watch
+
+npx tsx scripts/seed.ts   # recarga las 12 preguntas del TP (borra las que haya)
 ```
 
 Nota: `build` usa el bundler estable (webpack), no Turbopack, para no depender de un
@@ -428,6 +430,54 @@ estirado, token vencido), el CRUD con sus validaciones cruzadas, el reorder, que
 vea `answer` y el jugador no, que 20 de 20 pedidos de `order` vengan barajados, el
 import/export, el control de partida y el reset. Datos de prueba borrados después.
 
+### Paso 9 — Contenido real ✅
+
+`scripts/seed.ts`, ejecutable con `npx tsx scripts/seed.ts`. Deja las 12 preguntas del
+TP con `order_index` 1..12, usando **los 7 tipos** (3 `single`, 2 `truefalse`, 2 `order`,
+2 `multiple`, 1 `match`, 1 `slider`, 1 `text`). `tsx` se agregó como devDependency.
+
+- **Valida las 12 con `questionInputSchema` antes de tocar la base.** Si una sola está
+  mal armada no escribe nada. Es el mismo schema del formulario del admin, así que una
+  pregunta sembrada se puede editar después sin sorpresas.
+- **Se niega a correr con la partida en `running`**: borrar las preguntas a mitad de
+  camino dejaría a los jugadores sin nada que mostrar.
+- Borrar `questions` arrastra `answers` por el `on delete cascade` del FK. Los jugadores
+  quedan; para limpiar todo antes de la clase va "Reiniciar todo" en `/admin`.
+- **Los ids de `order` y `match` son slugs semánticos, no ordinales** (`motor`,
+  `tractor`, `fn-agujas`). El `payload` viaja al celular: unos ids `1..5` en el orden
+  correcto serían la respuesta servida en el JSON aunque `lib/shuffle.ts` baraje lo que
+  se muestra.
+- `time_limit` por tipo, no uniforme: 15 s para `truefalse`, 20-25 s para `single` y
+  `slider`, 30-35 s para `multiple` y `text`, 45 s para el `order` de 5 pasos y 60 s
+  para el `match` de 5 pares. Techo total ≈ 6 min.
+- `points` 1000 en todas: la parte de velocidad del puntaje se mide contra el
+  `time_limit` de cada pregunta, así que no hace falta compensar a mano.
+
+Dos correcciones de contenido sobre el enunciado original, anotadas al pie del script:
+
+- **La pregunta del slider preguntaba por "una NLQ típica" esperando 24.** NLQ era
+  justamente el modo con el que las máquinas de **9** agujas simulaban buena calidad
+  pasando el cabezal dos veces; las de 24 se vendían como LQ. Con esa redacción la
+  respuesta defendible era 9, y además contradecía la pregunta 12, que pone NLQ debajo
+  de LQ. Ahora pregunta por el cabezal de alta calidad (serie LQ), donde 24 es correcta.
+- **La pregunta 9 traía solo la opción correcta**; se escribieron tres distractores.
+
+Verificado con las 12 ya cargadas en la base (79 comprobaciones):
+
+- Las 12 pasan `questionSchema`, y las 12 **renderizan** con `renderToStaticMarkup`,
+  tanto sueltas como en la composición exacta de la vista previa del admin
+  (`QuestionShell` + `QuestionRenderer`).
+- Todo texto que el jugador tiene que leer aparece en el HTML (opciones, ítems, ambas
+  columnas del `match`, la unidad del slider).
+- La respuesta correcta de cada una da `ratio === 1`; una deliberadamente equivocada da
+  menos (0 en la mayoría, 0.20 y 0.33 en los `order` invertidos, por crédito parcial).
+- Contra `GET /api/questions` en caliente: 12 preguntas, en orden, la palabra `answer`
+  no aparece en el JSON, ningún `choiceId` correcto se filtra, y en 15 pedidos la #3
+  llegó con 15 órdenes distintos — ninguno el correcto.
+- La pregunta de texto acepta mayúsculas, acentos, guiones, espacios de más, un typo
+  (`near leter quality`) y las dos formas en español; rechaza `letter quality`, `laser`
+  y el vacío.
+
 ### Pendiente
 
 - [x] ~~Ejecutar `supabase/schema.sql` y cargar las env vars reales.~~ Hecho y verificado
@@ -436,7 +486,16 @@ import/export, el control de partida y el reset. Datos de prueba borrados despu�
 - [x] ~~Borrar `app/styleguide/`.~~ Hecho. `/styleguide` devuelve 404.
 - [x] ~~Panel de admin.~~ Hecho. Ya se puede abrir, iniciar y cerrar la partida desde
       `/admin`, sin tocar SQL.
-- [ ] Cargar las preguntas reales del TP en `questions` (la tabla está vacía).
-- [ ] **Ninguna pantalla se probó con ojos en un navegador.** Todo se verificó por API y
-      por HTML servido. Falta esa pasada antes de la clase.
-- [ ] Ensayo general: abrir la partida, jugar desde dos celulares y proyectar el ranking.
+- [x] ~~Cargar las preguntas reales del TP en `questions`.~~ Hecho con
+      `scripts/seed.ts`: 12 preguntas, los 7 tipos, verificadas.
+- [x] ~~Probar el juego en un celular real.~~ Hecho por LAN contra el server de
+      desarrollo, antes de cargar el contenido final. Para repetirlo: abrir el panel en
+      `http://<ip-de-la-pc>:3000/admin` (**no** en `localhost`, porque el QR se arma con
+      `window.location.origin` y el celular no resuelve `localhost`).
+- [ ] **Deploy a Vercel.** No hay remote de git todavía. Es lo único que falta para que
+      la app exista fuera de esta máquina.
+- [ ] **Las pantallas se vieron una vez en el navegador, no se auditaron.** El panel de
+      admin y el ranking en proyector siguen sin una pasada con ojos.
+- [ ] Ensayo general con el contenido final: abrir la partida, jugar las 12 desde dos
+      celulares y proyectar el ranking. Ojo con la #4 (`match`, 5 pares) y la #3
+      (`order`, 5 ítems), que son las más apretadas en pantalla chica.
