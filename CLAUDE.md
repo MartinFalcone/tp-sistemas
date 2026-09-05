@@ -86,6 +86,9 @@ respuestas correctas — antes de jugar.
 | `lib/supabase.ts` | **server-only**: `getSupabaseAdmin()` (lazy, memoizado) y `getAdminPassword()` |
 | `lib/scoring.ts` | `grade(question, response)` y `computeScore({...})`, puras |
 | `lib/normalize.ts` | `normalizeAnswerText()`, `normalizeNickname()`, `levenshtein()` |
+| `lib/profanity.ts` | `containsProfanity()` — lista corta, dos niveles |
+| `lib/player.ts` | jugador en `localStorage` (cliente) |
+| `lib/useGameState.ts` | polling de `/api/state` (cliente) |
 
 Por tipo de pregunta, `payload` es lo que ve el jugador, `answer` la respuesta correcta
 (solo servidor) y `response` lo que manda el jugador:
@@ -99,6 +102,44 @@ Por tipo de pregunta, `payload` es lo que ve el jugador, `answer` la respuesta c
 | `match` | `{ left: [...], right: [...] }` | `{ pairs: {leftId: rightId} }` | `{ pairs: {...} }` |
 | `slider` | `{ min, max, step, unit }` | `{ value, tolerance }` | `{ value }` |
 | `text` | `{ placeholder }` | `{ accepted: [string,...] }` | `{ text }` |
+
+### Rutas
+
+| Ruta | Qué es |
+| --- | --- |
+| `/` | ingreso con apodo (`components/JoinScreen.tsx`) |
+| `/jugar` | despacha según `game_state.status` (`components/GameGate.tsx`) |
+| `POST /api/join` | `{ nickname }` → `{ playerId, nickname }` |
+| `GET /api/state` | `{ status, endsAt, revealRanking, playerCount }` |
+
+`/api/join` es **idempotente por apodo**: si el `nickname_key` ya existe devuelve
+ese mismo jugador en vez de fallar. Alguien que recarga, se queda sin batería o
+cambia de red vuelve a su misma partida con su puntaje. Si dos personas mandan el
+mismo apodo a la vez, el segundo insert choca con el índice único (`23505`) y se
+resuelve releyendo la fila.
+
+El jugador se guarda en `localStorage` bajo `quiz.player` (`lib/player.ts`), con
+todos los accesos en try/catch: en incógnito o con cookies bloqueadas
+`localStorage` tira excepción y eso no puede tumbar la pantalla.
+
+### Reglas del cliente con conexión mala
+
+Esto no es opcional: la clase corre con datos móviles.
+
+- `useGameState()` (`lib/useGameState.ts`) consulta `/api/state` cada 2 s. Un
+  fetch que falla **no** cambia de pantalla ni borra el último estado conocido:
+  solo baja `connected`, y el próximo ciclo reintenta. Sin backoff, sin modales.
+- Un flag `inFlight` evita que se acumulen pedidos cuando una request tarda más
+  que el intervalo.
+- `<ConnectionBadge>` es el único aviso: un pill chico que dice "Sin conexión,
+  reintentando". No bloquea nada.
+- Toda pantalla que dependa de `localStorage` renderiza un estado de carga hasta
+  que corre el efecto — leerlo durante el render del servidor rompe la
+  hidratación, y dejar el markup vacío deja la pantalla en blanco mientras baja
+  el JS.
+- **Todos los mensajes de error dicen qué pasó y qué hacer**, y están en español.
+  Ningún error de zod en inglés puede llegar a la pantalla: `nicknameSchema` trae
+  su propio mensaje incluso para "no es un string".
 
 ### Reglas de corrección (`grade`)
 
@@ -184,11 +225,31 @@ Esta sección se actualiza en **cada paso**.
   ids repetidos, respuestas basura, tolerancia 0, typos en respuestas cortas).
 - Se subió `@types/node` de v20 a v24 porque vitest 5 lo pide como peer.
 
+### Paso 3 — Ingreso de los estudiantes ✅
+
+- `POST /api/join` y `GET /api/state` (ambos `force-dynamic`, sin caché).
+- `/` con el formulario de apodo, detección de jugador guardado ("Seguís como X"
+  + Continuar + Cambiar de nombre) y redirección a `/jugar`.
+- `/jugar` con polling cada 2 s: `lobby` → sala de espera, `running` →
+  placeholder del juego, `finished` → redirige a `/ranking`.
+- `lib/profanity.ts` con filtro de apodos en dos niveles.
+- Animación temática: `components/DotMatrixPrinter.tsx`, papel continuo con banda
+  perforada y un cabezal que imprime el texto carácter por carácter. El cabezal
+  se posiciona en unidades `ch`, que en monoespaciada es exactamente un carácter.
+- Tokens de color en `app/globals.css` (`surface`, `border`, `muted`, `accent`,
+  `danger`, `paper`) para light y dark, más un bloque global de
+  `prefers-reduced-motion`.
+- 75 tests en total (se sumaron los de apodo y filtro de insultos).
+
+Probado contra el server de desarrollo: los 400 de validación, el body no-JSON,
+el 503 de `/api/state` y el SSR de las dos pantallas. **Los caminos que tocan la
+base (jugador existente, carrera por el mismo apodo, `playerCount`) todavía no se
+probaron contra una base real** — falta ejecutar el schema y cargar las env vars.
+
 ### Pendiente
 
 - [ ] Ejecutar `supabase/schema.sql` en el proyecto de Supabase y cargar las env vars reales.
-- [ ] Route Handlers en `/app/api` (ingreso, traer preguntas, responder, ranking, admin).
-- [ ] Pantalla de ingreso con apodo.
-- [ ] Pantalla de juego con timer.
-- [ ] Ranking final.
+- [ ] `/ranking` — todavía no existe; `/jugar` ya redirige ahí cuando el estado es `finished`.
+- [ ] Pantalla de juego con timer (reemplaza `components/PlayScreen.tsx`).
+- [ ] Endpoints de preguntas y de respuesta (con `toPublicQuestion()`).
 - [ ] Panel de admin (login, CRUD de preguntas, control de la partida).

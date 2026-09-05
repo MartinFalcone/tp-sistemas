@@ -333,6 +333,59 @@ export type RankingEntry = {
 };
 
 // ---------------------------------------------------------------------------
+// Contratos de la API
+//
+// Los mensajes de error son los que ve el estudiante en el celular: dicen qué
+// pasó y qué hacer. Se escriben acá una sola vez, no en cada pantalla.
+// ---------------------------------------------------------------------------
+
+export const NICKNAME_MAX_LENGTH = 20;
+
+/**
+ * Apodo del jugador. Recorta, colapsa espacios y valida.
+ * Preserva mayúsculas y acentos: la versión normalizada para comparar es
+ * `nickname_key`, que la calcula `normalizeNickname()`.
+ */
+export const nicknameSchema = z
+  // El mensaje cubre también el caso de que falte el campo o no sea string:
+  // ningún error de zod en inglés puede llegar a la pantalla del estudiante.
+  .string({ error: "Escribí un apodo para entrar." })
+  .transform((value) => value.replace(/\s+/gu, " ").trim())
+  .refine((value) => value.length > 0, {
+    message: "Escribí un apodo para entrar.",
+  })
+  .refine(([...chars]) => chars.length <= NICKNAME_MAX_LENGTH, {
+    message: `El apodo no puede tener más de ${NICKNAME_MAX_LENGTH} caracteres. Probá con uno más corto.`,
+  })
+  // Caracteres de control y de formato (incluido el override de dirección, que
+  // puede dar vuelta el texto del ranking). Los emoji comunes siguen pasando.
+  .refine((value) => !/[\p{Cc}\p{Cf}]/u.test(value), {
+    message:
+      "El apodo tiene caracteres que no se pueden usar. Probá solo con letras y números.",
+  });
+
+export const joinRequestSchema = z.object({ nickname: nicknameSchema });
+export type JoinRequest = z.input<typeof joinRequestSchema>;
+
+export const joinResponseSchema = z.object({
+  playerId: z.uuid(),
+  nickname: z.string().min(1),
+});
+export type JoinResponse = z.infer<typeof joinResponseSchema>;
+
+/** Lo que devuelve `GET /api/state`. */
+export const gameStateResponseSchema = z.object({
+  status: gameStatusSchema,
+  endsAt: z.string().nullable(),
+  revealRanking: z.boolean(),
+  playerCount: z.number().int().nonnegative(),
+});
+export type GameStateResponse = z.infer<typeof gameStateResponseSchema>;
+
+/** Forma única de los errores de la API. `error` se muestra tal cual. */
+export type ApiError = { error: string };
+
+// ---------------------------------------------------------------------------
 // Filas crudas de Postgres
 //
 // Lo que devuelve supabase-js antes de pasar por zod: payload, answer y response

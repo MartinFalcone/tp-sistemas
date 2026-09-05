@@ -3,11 +3,30 @@
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --muted: #64748b;
+  --accent: #1d4ed8;
+  --accent-foreground: #ffffff;
+  --danger: #b91c1c;
+  /* Papel continuo de impresora: apenas amarillento. */
+  --paper: #fbf8ef;
+  --paper-ink: #1f2937;
+  --paper-border: #e0d9c4;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-danger: var(--danger);
+  --color-paper: var(--paper);
+  --color-paper-ink: var(--paper-ink);
+  --color-paper-border: var(--paper-border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -16,6 +35,15 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --surface: #171717;
+    --border: #2a2a2a;
+    --muted: #9ca3af;
+    --accent: #3b82f6;
+    --accent-foreground: #0a0a0a;
+    --danger: #f87171;
+    --paper: #1c1a15;
+    --paper-ink: #e8e2cf;
+    --paper-border: #3a352a;
   }
 }
 
@@ -52,5 +80,15 @@
   /* Nada de tap-highlight azul: la UI es toda botones grandes. */
   * {
     -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
