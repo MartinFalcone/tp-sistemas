@@ -272,6 +272,55 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
  */
 export type PublicQuestion = DistributiveOmit<Question, "answer">;
 
+/**
+ * El mismo union pero sin `answer`, para validar lo que llega del servidor al
+ * cliente. No se puede derivar con `.omit()`: en zod 4 eso no existe sobre un
+ * `discriminatedUnion`, hay que escribir los miembros.
+ */
+export const publicQuestionSchema = z.discriminatedUnion("type", [
+  z.object({
+    ...questionMetaShape,
+    type: z.literal("single"),
+    payload: singlePayloadSchema,
+  }),
+  z.object({
+    ...questionMetaShape,
+    type: z.literal("multiple"),
+    payload: multiplePayloadSchema,
+  }),
+  z.object({
+    ...questionMetaShape,
+    type: z.literal("truefalse"),
+    payload: truefalsePayloadSchema,
+  }),
+  z.object({
+    ...questionMetaShape,
+    type: z.literal("order"),
+    payload: orderPayloadSchema,
+  }),
+  z.object({
+    ...questionMetaShape,
+    type: z.literal("match"),
+    payload: matchPayloadSchema,
+  }),
+  z.object({
+    ...questionMetaShape,
+    type: z.literal("slider"),
+    payload: sliderPayloadSchema,
+  }),
+  z.object({
+    ...questionMetaShape,
+    type: z.literal("text"),
+    payload: textPayloadSchema,
+  }),
+]);
+
+// Si los dos se separan, esto deja de compilar.
+const _publicQuestionSchemaMatchesType: PublicQuestion = null as unknown as z.infer<
+  typeof publicQuestionSchema
+>;
+void _publicQuestionSchemaMatchesType;
+
 /** Saca `answer`. Usar SIEMPRE antes de responderle una pregunta a un jugador. */
 export function toPublicQuestion(question: Question): PublicQuestion {
   const { answer, ...rest } = question;
@@ -373,14 +422,31 @@ export const joinResponseSchema = z.object({
 });
 export type JoinResponse = z.infer<typeof joinResponseSchema>;
 
+/** Cómo va un jugador. Solo se calcula si se pide con `?playerId=`. */
+export const playerStandingSchema = z.object({
+  totalScore: z.number().int(),
+  /** Posición provisoria. null si `reveal_ranking` está apagado. */
+  rank: z.number().int().positive().nullable(),
+  totalPlayers: z.number().int().nonnegative(),
+  answered: z.number().int().nonnegative(),
+});
+export type PlayerStanding = z.infer<typeof playerStandingSchema>;
+
 /** Lo que devuelve `GET /api/state`. */
 export const gameStateResponseSchema = z.object({
   status: gameStatusSchema,
   endsAt: z.string().nullable(),
   revealRanking: z.boolean(),
   playerCount: z.number().int().nonnegative(),
+  /** Presente solo si se pasó `?playerId=`. */
+  me: playerStandingSchema.nullable().optional(),
 });
 export type GameStateResponse = z.infer<typeof gameStateResponseSchema>;
+
+/** Lo que devuelve `GET /api/questions`. */
+export const questionsResponseSchema = z.object({
+  questions: z.array(z.unknown()),
+});
 
 /** Forma única de los errores de la API. `error` se muestra tal cual. */
 export type ApiError = { error: string };
@@ -395,23 +461,37 @@ export type ApiError = { error: string };
  */
 export const TIMEOUT_RESPONSE = { timedOut: true } as const;
 
+/** Body de `POST /api/answer`. */
+export const answerRequestSchema = z.object({
+  playerId: z.uuid({ error: "Volvé a entrar con tu apodo." }),
+  questionId: z.uuid({ error: "Esa pregunta no existe." }),
+  response: z.unknown(),
+  elapsedMs: z.number().nonnegative({
+    error: "El tiempo de respuesta no es válido.",
+  }),
+});
+export type AnswerRequest = z.infer<typeof answerRequestSchema>;
+
 /**
  * Lo que el servidor devuelve después de corregir una respuesta.
  *
- * `correctText` es la respuesta correcta ya formateada para mostrar: el cliente
- * nunca recibe el `answer` crudo, y solo llega acá, después de haber respondido.
+ * `correctAnswer` es la respuesta correcta ya formateada para mostrar: el
+ * cliente nunca recibe el `answer` crudo, y esto solo llega después de haber
+ * respondido.
  */
 export const answerResultSchema = z.object({
   isCorrect: z.boolean(),
   ratio: z.number(),
   /** Puntos que sumó esta pregunta. */
   score: z.number().int(),
+  correctAnswer: z.string(),
+  /** La explicación de una línea, para aprender del error. */
+  hint: z.string().nullable(),
   /** Puntaje acumulado después de esta pregunta. */
   totalScore: z.number().int(),
-  /** Posición en el ranking. null si el ranking está oculto. */
-  position: z.number().int().positive().nullable(),
-  totalPlayers: z.number().int().nonnegative().nullable(),
-  correctText: z.string(),
+  /** Posición en el ranking. null si `reveal_ranking` está apagado. */
+  rank: z.number().int().positive().nullable(),
+  totalPlayers: z.number().int().nonnegative(),
 });
 export type AnswerResult = z.infer<typeof answerResultSchema>;
 

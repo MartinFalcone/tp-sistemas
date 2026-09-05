@@ -19,7 +19,15 @@ export type UseGameState = {
  * Pensado para datos móviles malos: un fetch que falla no rompe nada ni borra el
  * estado que ya teníamos, solo baja `connected`. El próximo ciclo reintenta.
  */
-export function useGameState(intervalMs = 2000): UseGameState {
+export function useGameState(
+  intervalMs = 2000,
+  /**
+   * Si viene, la respuesta agrega `me` con el puntaje y la posición provisoria.
+   * Lo pide solo la pantalla de "Terminaste": calcularlo es agregar todas las
+   * respuestas de todos, y no vale la pena pagarlo en cada poll de la partida.
+   */
+  playerId?: string,
+): UseGameState {
   const [state, setState] = useState<GameStateResponse | null>(null);
   const [connected, setConnected] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -37,7 +45,11 @@ export function useGameState(intervalMs = 2000): UseGameState {
       inFlight.current = true;
 
       try {
-        const response = await fetch("/api/state", {
+        const url = playerId
+          ? `/api/state?playerId=${encodeURIComponent(playerId)}`
+          : "/api/state";
+
+        const response = await fetch(url, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -66,7 +78,7 @@ export function useGameState(intervalMs = 2000): UseGameState {
       controller.abort();
       clearInterval(timer);
     };
-  }, [intervalMs]);
+  }, [intervalMs, playerId]);
 
   return { state, connected, loading };
 }

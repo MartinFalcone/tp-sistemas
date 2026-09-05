@@ -83,11 +83,7 @@ export function QuestionStage({
 
   if (result) {
     return (
-      <QuestionResult
-        result={result}
-        hint={question.hint}
-        durationMs={resultMs}
-      />
+      <QuestionResult result={result} durationMs={resultMs} />
     );
   }
 

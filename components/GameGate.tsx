@@ -64,7 +64,7 @@ export function GameGate() {
       ) : state.status === "lobby" ? (
         <WaitingRoom playerCount={state.playerCount} />
       ) : state.status === "running" ? (
-        <PlayScreen />
+        <PlayScreen playerId={player.playerId} endsAt={state.endsAt} />
       ) : (
         <Centered>La partida terminó. Llevándote al ranking…</Centered>
       )}

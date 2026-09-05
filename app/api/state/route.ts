@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { entryOf, loadStandings, rankOf } from "@/lib/ranking";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import type { ApiError, GameStateResponse } from "@/lib/types";
 
@@ -10,12 +11,17 @@ export const revalidate = 0;
 /**
  * GET /api/state — estado de la partida, para el polling de /jugar.
  *
- * Devuelve solo lo que el jugador necesita para saber en qué pantalla está.
- * Nada de preguntas ni respuestas correctas.
+ * Con `?playerId=` agrega `me` con el puntaje y la posición provisoria de ese
+ * jugador. Se calcula solo si se pide: la tabla de posiciones sale de agregar
+ * todas las respuestas, y no hace falta pagarla en cada poll de cada celular
+ * durante toda la partida. La pide únicamente la pantalla de "Terminaste".
+ *
+ * Nunca devuelve preguntas ni respuestas correctas.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const db = getSupabaseAdmin();
+    const playerId = new URL(request.url).searchParams.get("playerId");
 
     const [state, players] = await Promise.all([
       db.from("game_state").select("*").eq("id", 1).maybeSingle(),
@@ -37,6 +43,22 @@ export async function GET() {
       revealRanking: state.data.reveal_ranking,
       playerCount: players.count ?? 0,
     };
+
+    if (playerId) {
+      const standings = await loadStandings(db);
+      const mine = entryOf(standings.entries, playerId);
+
+      body.me = mine
+        ? {
+            totalScore: mine.score,
+            rank: state.data.reveal_ranking
+              ? rankOf(standings.entries, playerId)
+              : null,
+            totalPlayers: standings.totalPlayers,
+            answered: mine.answered,
+          }
+        : null;
+    }
 
     return NextResponse.json(body, {
       headers: { "Cache-Control": "no-store, max-age=0" },

@@ -123,7 +123,9 @@ Por tipo de pregunta, `payload` es lo que ve el jugador, `answer` la respuesta c
 | `/` | ingreso con apodo (`components/JoinScreen.tsx`) |
 | `/jugar` | despacha según `game_state.status` (`components/GameGate.tsx`) |
 | `POST /api/join` | `{ nickname }` → `{ playerId, nickname }` |
-| `GET /api/state` | `{ status, endsAt, revealRanking, playerCount }` |
+| `GET /api/state` | `{ status, endsAt, revealRanking, playerCount }`; con `?playerId=` agrega `me` |
+| `GET /api/questions` | preguntas activas ordenadas, **sin `answer`**. Solo con `status = 'running'` |
+| `POST /api/answer` | `{ playerId, questionId, response, elapsedMs }` → corrige y puntúa |
 
 `/api/join` es **idempotente por apodo**: si el `nickname_key` ya existe devuelve
 ese mismo jugador en vez de fallar. Alguien que recarga, se queda sin batería o
@@ -309,15 +311,55 @@ Decisiones que importan:
 - **El `hint` de la pregunta se muestra solo al errar**, y ocupa más lugar que el puntaje:
   es una exposición académica, lo que importa es que entiendan el error.
 
+### Paso 6 — La partida ✅
+
+`GET /api/questions` + `POST /api/answer` + `components/PlayScreen.tsx`.
+
+Cada jugador avanza a su ritmo por las preguntas activas ordenadas por `order_index`,
+con el `time_limit` de cada una y el deadline global de `game_state.ends_at`. No se
+puede volver atrás.
+
+Decisiones que importan:
+
+- **`POST /api/answer` es idempotente.** Si ya hay una respuesta de ese jugador para esa
+  pregunta, devuelve la guardada en vez de 500 y sin pisarla. Es lo que hace seguro
+  reintentar con conexión mala.
+- **`elapsedMs` se clampea a `time_limit * 1000` en el servidor.** El celular podría
+  mandar 0 para fingir que respondió al instante; el clamp acota la parte de velocidad
+  del puntaje.
+- **El progreso guarda `startedAt`, no "cuánto falta"** (`quiz.progress`). Guardar solo
+  el índice haría que cerrar y reabrir el navegador reinicie el cronómetro, que es una
+  forma trivial de conseguir el puntaje de velocidad completo.
+- **Las preguntas se traen una sola vez** al entrar a `running`. Durante la partida no se
+  vuelven a pedir: un corte de conexión no deja a nadie sin poder seguir.
+- **Cola de envíos con reintentos** (`lib/useAnswerQueue.ts`): 3 intentos con backoff y,
+  si aun así falla, la respuesta queda en `quiz.queue` y **el alumno pasa igual a la
+  siguiente**. La cola se vacía sola. Un 4xx no se reintenta ni se encola: reintentar no
+  lo arregla.
+- **`rank` es `null` cuando `reveal_ranking` está apagado**, en `/api/answer` y en
+  `/api/state`. Es para lo que existe esa columna.
+- **`me` en `/api/state` se calcula solo si se pasa `?playerId=`.** Sale de agregar todas
+  las respuestas de todos; no vale la pena pagarlo en cada poll de cada celular. Lo pide
+  únicamente la pantalla de "Terminaste".
+- Una pregunta con el jsonb mal cargado **se saltea** en `/api/questions` en vez de tumbar
+  la partida, y se loguea para que el expositor la arregle.
+
+Probado de punta a punta contra la base real (21 verificaciones): el 409 en lobby, que
+ninguna pregunta salga con `answer`, el orden, el puntaje por velocidad, la idempotencia,
+el clamp de `elapsedMs`, el timeout, `me`, los rechazos por jugador o pregunta inexistente
+y el corte por deadline global. Los datos de prueba se borraron después.
+
 ### Pendiente
 
 - [x] ~~Ejecutar `supabase/schema.sql` y cargar las env vars reales.~~ Hecho y verificado
       contra la base: las 4 tablas con todas sus columnas, la fila `game_state` id=1 con
       sus defaults, los check de `type` y de `id = 1`, y el unique de `nickname_key`.
 - [x] ~~Borrar `app/styleguide/`.~~ Hecho. `/styleguide` devuelve 404.
-- [ ] Conectar el juego: endpoints de preguntas y de respuesta, y la pantalla que use
-      `QuestionStage` (hoy `components/PlayScreen.tsx` es un placeholder).
+- [ ] **`/ranking` no existe todavía** y `GameGate` ya redirige ahí cuando el estado pasa
+      a `finished`: hoy eso es un 404 al final de la partida.
 - [ ] Cargar las preguntas reales del TP en `questions` (la tabla está vacía).
+- [ ] Panel de admin: es lo único que puede pasar `game_state.status` a `running` y a
+      `finished`. Hoy hay que hacerlo a mano por SQL.
 - [ ] `/ranking` — todavía no existe; `/jugar` ya redirige ahí cuando el estado es `finished`.
 - [ ] Pantalla de juego con timer (reemplaza `components/PlayScreen.tsx`).
 - [ ] Endpoints de preguntas y de respuesta (con `toPublicQuestion()`).

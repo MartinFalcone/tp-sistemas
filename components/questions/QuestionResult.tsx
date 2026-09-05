@@ -14,16 +14,13 @@ import type { AnswerResult } from "@/lib/types";
  */
 export function QuestionResult({
   result,
-  hint,
   durationMs,
 }: {
   result: AnswerResult;
-  /** `question.hint`: la explicación de una línea. */
-  hint: string | null;
   /** Cuánto dura la pantalla, para dibujar la barra de avance. */
   durationMs: number;
 }) {
-  const { isCorrect, score, totalScore, position, totalPlayers } = result;
+  const { isCorrect, score, totalScore, rank, totalPlayers, hint } = result;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5">
@@ -59,7 +56,7 @@ export function QuestionResult({
           </h2>
           {/* El barrido del cabezal: el único momento de movimiento. */}
           <OptionRow letter="■" state="correct" reveal>
-            {result.correctText}
+            {result.correctAnswer}
           </OptionRow>
           {hint ? (
             <p className="pt-1 text-[0.9375rem] leading-snug text-carbon">
@@ -86,14 +83,13 @@ export function QuestionResult({
           <span className="text-base tabular-nums">{totalScore}</span>
         </div>
 
-        {position !== null ? (
+        {rank !== null ? (
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-[0.6875rem] tracking-[0.14em] text-carbon uppercase">
               Vas
             </span>
             <span className="text-base tabular-nums">
-              {position}
-              {totalPlayers !== null ? ` de ${totalPlayers}` : ""}
+              {rank} de {totalPlayers}
             </span>
           </div>
         ) : null}
