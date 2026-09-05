@@ -9,20 +9,34 @@ import clsx from "clsx";
 export function Paper({
   children,
   className,
+  size = "phone",
 }: {
   children: React.ReactNode;
   className?: string;
+  /** "tv" es el modo proyector: hoja ancha y todo más grande. */
+  size?: "phone" | "tv";
 }) {
+  const tv = size === "tv";
+
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
+    <div
+      className={clsx(
+        "mx-auto flex min-h-dvh w-full flex-col",
+        tv ? "max-w-6xl" : "max-w-md",
+      )}
+    >
       <div aria-hidden className="papel-corte" />
 
       <div className="flex flex-1 items-stretch">
-        <div aria-hidden className="papel-canaleta w-4 shrink-0" />
+        <div
+          aria-hidden
+          className={clsx("papel-canaleta shrink-0", tv ? "w-6" : "w-4")}
+        />
 
         <main
           className={clsx(
-            "flex min-w-0 flex-1 flex-col px-4 py-5",
+            "flex min-w-0 flex-1 flex-col",
+            tv ? "px-6 py-6" : "px-4 py-5",
             "pb-[max(1.25rem,env(safe-area-inset-bottom))]",
             className,
           )}

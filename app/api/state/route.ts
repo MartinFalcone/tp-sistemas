@@ -46,15 +46,15 @@ export async function GET(request: Request) {
 
     if (playerId) {
       const standings = await loadStandings(db);
-      const mine = entryOf(standings.entries, playerId);
+      const mine = entryOf(standings.all, playerId);
 
       body.me = mine
         ? {
             totalScore: mine.score,
             rank: state.data.reveal_ranking
-              ? rankOf(standings.entries, playerId)
+              ? rankOf(standings.ranked, playerId)
               : null,
-            totalPlayers: standings.totalPlayers,
+            totalPlayers: standings.ranked.length,
             answered: mine.answered,
           }
         : null;

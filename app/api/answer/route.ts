@@ -108,7 +108,7 @@ export async function POST(request: Request) {
       score: number;
     }): Promise<NextResponse> => {
       const standings = await loadStandings(db);
-      const mine = entryOf(standings.entries, playerId);
+      const mine = entryOf(standings.all, playerId);
 
       const result: AnswerResult = {
         isCorrect: saved.is_correct,
@@ -117,8 +117,8 @@ export async function POST(request: Request) {
         correctAnswer: describeAnswer(question.data),
         hint: question.data.hint,
         totalScore: mine?.score ?? 0,
-        rank: revealRanking ? rankOf(standings.entries, playerId) : null,
-        totalPlayers: standings.totalPlayers,
+        rank: revealRanking ? rankOf(standings.ranked, playerId) : null,
+        totalPlayers: standings.ranked.length,
       };
 
       return NextResponse.json(result, {

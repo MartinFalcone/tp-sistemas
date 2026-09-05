@@ -126,6 +126,8 @@ Por tipo de pregunta, `payload` es lo que ve el jugador, `answer` la respuesta c
 | `GET /api/state` | `{ status, endsAt, revealRanking, playerCount }`; con `?playerId=` agrega `me` |
 | `GET /api/questions` | preguntas activas ordenadas, **sin `answer`**. Solo con `status = 'running'` |
 | `POST /api/answer` | `{ playerId, questionId, response, elapsedMs }` → corrige y puntúa |
+| `GET /api/ranking` | la tabla ordenada. Con `?tv=1` ignora `reveal_ranking` |
+| `/ranking` | ranking (`components/RankingScreen.tsx`). `?tv=1` = modo proyector |
 
 `/api/join` es **idempotente por apodo**: si el `nickname_key` ya existe devuelve
 ese mismo jugador en vez de fallar. Alguien que recarga, se queda sin batería o
@@ -349,18 +351,47 @@ ninguna pregunta salga con `answer`, el orden, el puntaje por velocidad, la idem
 el clamp de `elapsedMs`, el timeout, `me`, los rechazos por jugador o pregunta inexistente
 y el corte por deadline global. Los datos de prueba se borraron después.
 
+### Paso 7 — Ranking ✅
+
+`GET /api/ranking` + `/ranking` (+ `?tv=1` para el proyector).
+
+- **Orden: puntaje descendente y, a igual puntaje, tiempo total ascendente.** El
+  desempate por la suma de `elapsed_ms` vive en `lib/ranking.ts` y lo usan por igual el
+  ranking, el `rank` de `/api/answer` y el `me` de `/api/state`: los tres números
+  siempre coinciden.
+- **Quien no respondió nada queda afuera del ranking** y su `rank` es `null`. Si no,
+  aparecería empatado en 0 con quien contestó todo mal, y no es lo mismo.
+- Los empates comparten puesto solo con puntaje **y** tiempo idénticos: 1, 2, 2, 4.
+- **`reveal_ranking = false` oculta la tabla de verdad**: el endpoint devuelve
+  `rows: []` y `hidden: true`, no la manda para que el cliente la descarte. Con la
+  partida en `finished` se muestra siempre — esa columna significa "¿se ve mientras se
+  juega?".
+- **`?tv=1` NO es un control de acceso.** Un alumno puede agregar el parámetro. Es una
+  decisión de presentación del expositor, no un secreto; lo que sí está protegido son
+  las respuestas correctas. Cuando exista el panel de admin, ahí va la cookie real.
+- El podio dibuja las posiciones con una **matriz de puntos de 5×7**
+  (`components/DotDigit.tsx`), con los puntos apagados apenas visibles para que se vea
+  la grilla de agujas. Nada de medallas emoji.
+- **Una sola revelación**: al pasar a `finished`, el podio se imprime con el barrido del
+  cabezal, del tercer puesto al primero. Se marca en `sessionStorage` para que no se
+  repita al recargar. Respeta `prefers-reduced-motion`.
+- El polling de 3 s **se corta** cuando el estado pasa a `finished`.
+- La fila del jugador se fija al pie solo mientras la suya no esté a la vista
+  (`IntersectionObserver`). En modo tv no aparece.
+
+Probado de punta a punta contra la base real (17 verificaciones): el orden, el desempate
+por tiempo, la exclusión de quien no respondió, `correct` sobre el total de preguntas
+activas, el gate de `reveal_ranking` con y sin `tv=1`, que con la partida terminada se
+vea igual, y que `me.rank` de `/api/state` coincida con la posición del ranking. Datos
+de prueba borrados después.
+
 ### Pendiente
 
 - [x] ~~Ejecutar `supabase/schema.sql` y cargar las env vars reales.~~ Hecho y verificado
       contra la base: las 4 tablas con todas sus columnas, la fila `game_state` id=1 con
       sus defaults, los check de `type` y de `id = 1`, y el unique de `nickname_key`.
 - [x] ~~Borrar `app/styleguide/`.~~ Hecho. `/styleguide` devuelve 404.
-- [ ] **`/ranking` no existe todavía** y `GameGate` ya redirige ahí cuando el estado pasa
-      a `finished`: hoy eso es un 404 al final de la partida.
+- [ ] **Panel de admin.** Es lo único que falta para poder correr la clase: hoy no hay
+      forma de pasar `game_state.status` a `running` ni a `finished` salvo por SQL a mano.
 - [ ] Cargar las preguntas reales del TP en `questions` (la tabla está vacía).
-- [ ] Panel de admin: es lo único que puede pasar `game_state.status` a `running` y a
-      `finished`. Hoy hay que hacerlo a mano por SQL.
-- [ ] `/ranking` — todavía no existe; `/jugar` ya redirige ahí cuando el estado es `finished`.
-- [ ] Pantalla de juego con timer (reemplaza `components/PlayScreen.tsx`).
-- [ ] Endpoints de preguntas y de respuesta (con `toPublicQuestion()`).
-- [ ] Panel de admin (login, CRUD de preguntas, control de la partida).
+- [ ] Ninguna pantalla se probó con ojos en un navegador. Falta esa pasada.

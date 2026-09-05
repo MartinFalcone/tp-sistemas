@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { describeAnswer } from "./answerText";
-import { rankOf } from "./ranking";
-import type { Question, RankingEntry } from "./types";
+import { positionsOf, rankOf, type StandingEntry } from "./ranking";
+import type { Question } from "./types";
 
 /** Campos de fila que no hacen al caso. */
 const meta = {
@@ -120,29 +120,55 @@ describe("describeAnswer", () => {
   });
 });
 
-describe("rankOf", () => {
-  const entries: RankingEntry[] = [
-    { player_id: "a", nickname: "Ana", score: 900, correct: 3, answered: 3 },
-    { player_id: "b", nickname: "Beto", score: 700, correct: 2, answered: 3 },
-    { player_id: "c", nickname: "Cami", score: 700, correct: 2, answered: 3 },
-    { player_id: "d", nickname: "Dani", score: 100, correct: 1, answered: 3 },
+describe("rankOf y positionsOf", () => {
+  const e = (
+    playerId: string,
+    nickname: string,
+    score: number,
+    elapsedMs: number,
+  ): StandingEntry => ({
+    playerId,
+    nickname,
+    score,
+    elapsedMs,
+    correct: 0,
+    answered: 3,
+  });
+
+  // Ya vienen ordenados como los deja loadStandings: puntaje desc, tiempo asc.
+  const ranked: StandingEntry[] = [
+    e("a", "Ana", 900, 5000),
+    e("b", "Beto", 700, 4000),
+    e("c", "Cami", 700, 9000),
+    e("d", "Dani", 100, 1000),
   ];
 
   it("cuenta desde 1", () => {
-    expect(rankOf(entries, "a")).toBe(1);
+    expect(rankOf(ranked, "a")).toBe(1);
   });
 
-  it("los empates comparten puesto y el siguiente lo saltea", () => {
-    expect(rankOf(entries, "b")).toBe(2);
-    expect(rankOf(entries, "c")).toBe(2);
-    expect(rankOf(entries, "d")).toBe(4);
+  it("a igual puntaje, gana quien tardó menos", () => {
+    // Beto y Cami empatan en 700, pero Beto tardó 4 s y Cami 9 s.
+    expect(rankOf(ranked, "b")).toBe(2);
+    expect(rankOf(ranked, "c")).toBe(3);
   });
 
-  it("devuelve null si el jugador no está", () => {
-    expect(rankOf(entries, "fantasma")).toBeNull();
+  it("solo comparten puesto con puntaje Y tiempo iguales", () => {
+    const empatados: StandingEntry[] = [
+      e("a", "Ana", 900, 5000),
+      e("b", "Beto", 700, 4000),
+      e("c", "Cami", 700, 4000),
+      e("d", "Dani", 100, 1000),
+    ];
+    expect(positionsOf(empatados)).toEqual([1, 2, 2, 4]);
+  });
+
+  it("devuelve null si el jugador no respondió nada", () => {
+    expect(rankOf(ranked, "fantasma")).toBeNull();
   });
 
   it("aguanta una tabla vacía", () => {
     expect(rankOf([], "a")).toBeNull();
+    expect(positionsOf([])).toEqual([]);
   });
 });

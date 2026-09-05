@@ -372,14 +372,34 @@ export const gameStateSchema = z.object({
 });
 export type GameState = z.infer<typeof gameStateSchema>;
 
-/** Una fila del ranking final. */
-export type RankingEntry = {
-  player_id: string;
-  nickname: string;
-  score: number;
-  correct: number;
-  answered: number;
-};
+/** Una fila del ranking, tal como sale de `GET /api/ranking`. */
+export const rankingRowSchema = z.object({
+  /** Posición, empezando en 1. Los empates exactos comparten puesto. */
+  position: z.number().int().positive(),
+  playerId: z.uuid(),
+  nickname: z.string().min(1),
+  score: z.number().int(),
+  correct: z.number().int().nonnegative(),
+  answered: z.number().int().nonnegative(),
+});
+export type RankingRow = z.infer<typeof rankingRowSchema>;
+
+/**
+ * Lo que devuelve `GET /api/ranking`.
+ *
+ * Trae también `status` y `revealRanking` para que la página no tenga que
+ * pollear `/api/state` en paralelo: con datos móviles malos, una request menos
+ * por ciclo importa.
+ */
+export const rankingResponseSchema = z.object({
+  rows: z.array(rankingRowSchema),
+  totalQuestions: z.number().int().nonnegative(),
+  status: gameStatusSchema,
+  revealRanking: z.boolean(),
+  /** true si la tabla viene vacía porque el expositor la tiene oculta. */
+  hidden: z.boolean(),
+});
+export type RankingResponse = z.infer<typeof rankingResponseSchema>;
 
 // ---------------------------------------------------------------------------
 // Contratos de la API
