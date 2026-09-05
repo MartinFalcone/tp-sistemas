@@ -53,6 +53,16 @@ Consecuencias prácticas:
   su respuesta y nada más: nunca manda puntaje, y nunca recibe `answer` antes de
   responder. Todo endpoint que devuelva preguntas a un jugador pasa por
   `toPublicQuestion()`, que borra el campo `answer`.
+- **La identidad visual está en `DESIGN.md` y no se improvisa.** Antes de escribir una
+  pantalla nueva, leerlo. Resumen operativo:
+  - Tokens: `papel`, `banda`, `tinta`, `cinta`, `carbon`, `filete`. No hay otros colores.
+  - `font-mono` (IBM Plex Mono) para lo que imprime la máquina: cronómetro, puntajes,
+    letras de opción, ranking, etiquetas. `font-sans` (IBM Plex Sans) para lo que lee la
+    persona: enunciados y opciones.
+  - Nada de sombras, gradientes ni radios grandes: radio máximo `rounded-hoja` (2px).
+  - Un solo tema. No hay modo oscuro.
+  - Todo estado se distingue **sin depender del color**: forma + textura además del color.
+  - Componentes base en `components/ui/`. Toda pantalla se envuelve en `<Paper>`.
 - Mobile-first: escribir los estilos para pantalla chica y recién ahí agregar `sm:`/`md:`.
 - Inputs con `font-size` ≥ 16px para que iOS no haga zoom automático (ya forzado en
   `app/globals.css`).
@@ -246,8 +256,25 @@ el 503 de `/api/state` y el SSR de las dos pantallas. **Los caminos que tocan la
 base (jugador existente, carrera por el mismo apodo, `playerCount`) todavía no se
 probaron contra una base real** — falta ejecutar el schema y cargar las env vars.
 
+### Paso 4 — Identidad visual ✅
+
+Plan completo en `DESIGN.md` (concepto, paleta con contrastes medidos, tipografía,
+wireframes, principios y autorrevisión).
+
+- Concepto: **el papel continuo es la pantalla.** Canaleta de arrastre perforada, líneas
+  de corte, papel pautado, cinta bicolor negro/rojo.
+- Tokens y clases `.papel-*` en `app/globals.css`; IBM Plex Sans/Mono en `app/layout.tsx`.
+- `components/ui/`: `Paper`, `Button`, `Card`, `Input`, `Timer`, `ProgressDots`, `OptionRow`.
+- Un solo momento de movimiento: el cabezal barre la fila correcta al revelar el resultado
+  (`OptionRow reveal`), 450ms. Respeta `prefers-reduced-motion`.
+- Área táctil mínima de 44px (`min-h-11`) y `:focus-visible` global en rojo de cinta.
+- Retrofit de todo el módulo anterior a la nueva identidad. El azul, las tarjetas
+  redondeadas, el crema y el modo oscuro que venían del template ya no están.
+- `/styleguide` para revisar en el celular.
+
 ### Pendiente
 
+- [ ] **Borrar `app/styleguide/` antes del deploy.**
 - [ ] Ejecutar `supabase/schema.sql` en el proyecto de Supabase y cargar las env vars reales.
 - [ ] `/ranking` — todavía no existe; `/jugar` ya redirige ahí cuando el estado es `finished`.
 - [ ] Pantalla de juego con timer (reemplaza `components/PlayScreen.tsx`).

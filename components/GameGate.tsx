@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { readStoredPlayer, type StoredPlayer } from "@/lib/player";
 import { useGameState } from "@/lib/useGameState";
+import { Paper, PaperHeader } from "@/components/ui/Paper";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { PlayScreen } from "./PlayScreen";
 import { WaitingRoom } from "./WaitingRoom";
@@ -37,11 +38,19 @@ export function GameGate() {
   // pantalla queda en blanco mientras baja el JS, que con datos móviles malos
   // puede ser un par de segundos.
   if (player === undefined) {
-    return <Shell>{<Centered>Cargando…</Centered>}</Shell>;
+    return (
+      <Shell>
+        <Centered>Cargando…</Centered>
+      </Shell>
+    );
   }
 
   if (player === null) {
-    return <Shell>{<Centered>Llevándote al ingreso…</Centered>}</Shell>;
+    return (
+      <Shell>
+        <Centered>Llevándote al ingreso…</Centered>
+      </Shell>
+    );
   }
 
   return (
@@ -63,14 +72,6 @@ export function GameGate() {
   );
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex flex-1 items-center justify-center text-center text-muted">
-      {children}
-    </div>
-  );
-}
-
 function Shell({
   nickname,
   connected = true,
@@ -81,20 +82,20 @@ function Shell({
   children: React.ReactNode;
 }) {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-6 px-6 py-8">
-      <header className="flex min-h-6 items-center justify-between gap-3">
-        {nickname ? (
-          <p className="truncate text-sm text-muted">
-            Entraste como{" "}
-            <span className="font-medium text-foreground">{nickname}</span>
-          </p>
-        ) : (
-          <span />
-        )}
-        <ConnectionBadge connected={connected} />
-      </header>
-
+    <Paper>
+      <PaperHeader
+        left={nickname ? `Jugador · ${nickname}` : "Impresoras de matriz de punto"}
+        right={<ConnectionBadge connected={connected} />}
+      />
       {children}
-    </main>
+    </Paper>
+  );
+}
+
+function Centered({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-1 items-center justify-center text-center text-carbon">
+      {children}
+    </div>
   );
 }

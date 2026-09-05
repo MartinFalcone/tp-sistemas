@@ -1,63 +1,46 @@
 @import "tailwindcss";
 
+/*
+ * Identidad visual: ver DESIGN.md.
+ * El papel continuo es la pantalla. Un solo tema, sin modo oscuro.
+ */
+
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --surface: #ffffff;
-  --border: #e2e8f0;
-  --muted: #64748b;
-  --accent: #1d4ed8;
-  --accent-foreground: #ffffff;
-  --danger: #b91c1c;
-  /* Papel continuo de impresora: apenas amarillento. */
-  --paper: #fbf8ef;
-  --paper-ink: #1f2937;
-  --paper-border: #e0d9c4;
+  --papel: #f2f1ea; /* papel de listado, blanco frio desaturado */
+  --banda: #d9e4d4; /* la banda verde del papel pautado */
+  --tinta: #1b1a17; /* negro de cinta fresca, calido, nunca #000 */
+  --cinta: #b4321f; /* el rojo de la cinta bicolor */
+  --carbon: #625f55; /* cinta gastada */
+
+  /* Filetes, perforado y bordes tenues. Un solo valor para todo el proyecto. */
+  --filete: color-mix(in srgb, var(--carbon) 35%, transparent);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-surface: var(--surface);
-  --color-border: var(--border);
-  --color-muted: var(--muted);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-danger: var(--danger);
-  --color-paper: var(--paper);
-  --color-paper-ink: var(--paper-ink);
-  --color-paper-border: var(--paper-border);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-papel: var(--papel);
+  --color-banda: var(--banda);
+  --color-tinta: var(--tinta);
+  --color-cinta: var(--cinta);
+  --color-carbon: var(--carbon);
+  --color-filete: var(--filete);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --surface: #171717;
-    --border: #2a2a2a;
-    --muted: #9ca3af;
-    --accent: #3b82f6;
-    --accent-foreground: #0a0a0a;
-    --danger: #f87171;
-    --paper: #1c1a15;
-    --paper-ink: #e8e2cf;
-    --paper-border: #3a352a;
-  }
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+
+  /* Una impresora no redondea esquinas. */
+  --radius-hoja: 2px;
 }
 
 @layer base {
   html {
-    /* Evita que iOS reescale el texto al rotar el telefono. */
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
 
   body {
-    background: var(--background);
-    color: var(--foreground);
-    font-family: var(--font-sans), system-ui, sans-serif;
+    background: var(--papel);
+    color: var(--tinta);
+    font-family: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
     /* Ninguna pantalla debe scrollear en horizontal en un celular. */
     max-width: 100vw;
     overflow-x: hidden;
@@ -68,18 +51,68 @@
 
   /*
    * iOS Safari hace zoom automatico al enfocar un campo con font-size < 16px.
-   * En un juego con timer eso rompe la pantalla, asi que forzamos el minimo.
+   * Los botones no disparan ese zoom, por eso no estan en la lista.
+   * Ojo: una utilidad como text-sm en un input le gana a esta regla (las
+   * utilities van despues de base), asi que Input fija text-base explicito.
    */
   input,
   select,
-  textarea,
-  button {
+  textarea {
     font-size: max(16px, 1rem);
   }
 
-  /* Nada de tap-highlight azul: la UI es toda botones grandes. */
+  /* Nada de tap-highlight azul: la UI es toda targets grandes. */
   * {
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /*
+   * Foco siempre visible, en rojo de cinta. Global, para que ningun componente
+   * se olvide. Nunca outline: none.
+   */
+  :focus-visible {
+    outline: 2px solid var(--cinta);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /*
+   * Canaleta de arrastre: agujeros punzados cada 24px en una columna de 16px.
+   * Es el signo mas reconocible del papel continuo y cuesta poco ancho.
+   */
+  .papel-canaleta {
+    background-image: radial-gradient(
+      circle at 50% 50%,
+      transparent 0 2.5px,
+      var(--filete) 2.5px 3.5px,
+      transparent 3.5px
+    );
+    background-size: 16px 24px;
+    background-repeat: repeat-y;
+    background-position: 0 10px;
+  }
+
+  /* Linea de corte del papel continuo. */
+  .papel-corte {
+    border-top: 1px dashed var(--filete);
+  }
+
+  /* El filete doble que separa secciones: el "═══" de un listado. */
+  .papel-doble-filete {
+    border-top: 3px double var(--tinta);
+  }
+
+  /*
+   * Trama diagonal. Textura, no color: la usa el cronometro en los ultimos
+   * segundos para que la urgencia se lea tambien en escala de grises.
+   */
+  .papel-trama {
+    background-image: repeating-linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--papel) 55%, transparent) 0 2px,
+      transparent 2px 5px
+    );
   }
 }
 

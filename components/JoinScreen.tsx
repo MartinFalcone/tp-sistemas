@@ -2,7 +2,6 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 
 import {
   clearStoredPlayer,
@@ -15,6 +14,9 @@ import {
   NICKNAME_MAX_LENGTH,
   type ApiError,
 } from "@/lib/types";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Paper, PaperHeader } from "@/components/ui/Paper";
 
 /**
  * Pantalla de ingreso.
@@ -105,104 +107,69 @@ export function JoinScreen() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-8 px-6 py-10">
-      <header className="space-y-2">
-        <p className="font-mono text-xs tracking-widest text-muted uppercase">
-          Sistemas de Computación
-        </p>
-        <h1 className="text-3xl font-semibold text-balance">
-          Impresoras de matriz de punto
+    <Paper className="justify-center gap-8">
+      <div>
+        <PaperHeader left="Sistemas de Computación" right="TP · 2026" />
+
+        <h1 className="font-mono text-3xl leading-[1.05] font-semibold tracking-tight uppercase">
+          Impresoras de
+          <br />
+          matriz de punto
         </h1>
-        <p className="text-muted">
-          Entrá con un apodo para jugar. No hace falta contraseña.
+        <p className="mt-3 text-carbon">
+          Entrá con un apodo. Sin contraseña.
         </p>
-      </header>
+      </div>
 
       {stored === undefined ? (
-        // Placeholder de la misma altura que el contenido real, para que no
-        // salte la pantalla cuando termina de leerse localStorage.
-        <div aria-hidden className="h-[7.5rem] animate-pulse rounded-xl bg-surface" />
+        // Reserva de altura para que no salte la pantalla cuando termina de
+        // leerse localStorage.
+        <div aria-hidden className="h-[8.5rem]" />
       ) : stored ? (
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-4 rounded-xl border border-border bg-surface p-5"
-        >
+        <section className="space-y-4">
           <p className="text-lg">
             Seguís como{" "}
-            <strong className="font-semibold break-all">{stored.nickname}</strong>
+            <strong className="font-mono font-semibold break-all">
+              {stored.nickname}
+            </strong>
           </p>
-          <button
-            type="button"
-            onClick={() => router.push("/jugar")}
-            className="w-full rounded-lg bg-accent px-4 py-3.5 font-semibold text-accent-foreground transition-opacity active:opacity-80"
-          >
+          <Button full onClick={() => router.push("/jugar")}>
             Continuar
-          </button>
-          <button
-            type="button"
-            onClick={changeName}
-            className="w-full text-sm text-muted underline underline-offset-4"
-          >
-            Cambiar de nombre
-          </button>
-        </motion.section>
-      ) : (
-        <motion.form
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          onSubmit={handleSubmit}
-          className="space-y-4"
-          noValidate
-        >
-          <div className="space-y-2">
-            <label htmlFor="nickname" className="block text-sm font-medium">
-              Tu apodo
-            </label>
-            <input
-              id="nickname"
-              name="nickname"
-              value={nickname}
-              onChange={(event) => {
-                setNickname(event.target.value);
-                if (error) setError(null);
-              }}
-              maxLength={NICKNAME_MAX_LENGTH}
-              autoComplete="off"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              enterKeyHint="go"
-              disabled={submitting}
-              placeholder="Ej: Martín"
-              aria-invalid={error !== null}
-              aria-describedby={error ? "nickname-error" : "nickname-hint"}
-              className="w-full rounded-lg border border-border bg-surface px-4 py-3.5 outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 disabled:opacity-60"
-            />
-            <p id="nickname-hint" className="text-xs text-muted">
-              Hasta {NICKNAME_MAX_LENGTH} caracteres. Lo van a ver todos en el ranking.
-            </p>
+          </Button>
+          <div className="text-center">
+            <Button variant="quiet" onClick={changeName}>
+              Cambiar de nombre
+            </Button>
           </div>
-
-          {error && (
-            <p
-              id="nickname-error"
-              role="alert"
-              className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2.5 text-sm text-danger"
-            >
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
+        </section>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+          <Input
+            id="nickname"
+            name="nickname"
+            label="Apodo"
+            value={nickname}
+            onChange={(event) => {
+              setNickname(event.target.value);
+              if (error) setError(null);
+            }}
+            error={error}
+            hint={`Hasta ${NICKNAME_MAX_LENGTH} caracteres. Lo van a ver todos en el ranking.`}
+            maxLength={NICKNAME_MAX_LENGTH}
+            autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="go"
             disabled={submitting}
-            className="w-full rounded-lg bg-accent px-4 py-3.5 font-semibold text-accent-foreground transition-opacity active:opacity-80 disabled:opacity-60"
-          >
+            placeholder="Martín"
+          />
+
+          <Button type="submit" full disabled={submitting}>
             {submitting ? "Entrando…" : "Entrar"}
-          </button>
-        </motion.form>
+          </Button>
+        </form>
       )}
-    </main>
+    </Paper>
   );
 }

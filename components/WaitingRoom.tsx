@@ -1,7 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
-
 import { DotMatrixPrinter } from "./DotMatrixPrinter";
 
 const WAITING_COPY = "Esperando que arranque la partida.";
@@ -14,23 +12,20 @@ const WAITING_COPY = "Esperando que arranque la partida.";
  */
 export function WaitingRoom({ playerCount }: { playerCount: number | null }) {
   return (
-    <div className="flex flex-1 flex-col justify-center gap-8">
-      <div className="space-y-3 text-center">
-        <h1 className="text-2xl font-semibold text-balance">{WAITING_COPY}</h1>
+    <div className="flex flex-1 flex-col justify-center gap-7">
+      <div className="space-y-3">
+        <h1 className="font-mono text-2xl leading-tight font-semibold uppercase text-balance">
+          {WAITING_COPY}
+        </h1>
 
-        <p className="text-muted" aria-live="polite">
+        <p className="font-mono text-sm text-carbon" aria-live="polite">
           {playerCount === null ? (
             "Contando quién entró…"
           ) : (
             <>
-              <motion.strong
-                key={playerCount}
-                initial={{ scale: 1.25 }}
-                animate={{ scale: 1 }}
-                className="inline-block font-semibold text-foreground tabular-nums"
-              >
+              <span className="text-2xl font-semibold text-tinta tabular-nums">
                 {playerCount}
-              </motion.strong>{" "}
+              </span>{" "}
               {playerCount === 1 ? "persona entró" : "personas entraron"}
             </>
           )}
