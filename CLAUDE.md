@@ -311,10 +311,13 @@ Decisiones que importan:
 
 ### Pendiente
 
+- [x] ~~Ejecutar `supabase/schema.sql` y cargar las env vars reales.~~ Hecho y verificado
+      contra la base: las 4 tablas con todas sus columnas, la fila `game_state` id=1 con
+      sus defaults, los check de `type` y de `id = 1`, y el unique de `nickname_key`.
+- [x] ~~Borrar `app/styleguide/`.~~ Hecho. `/styleguide` devuelve 404.
 - [ ] Conectar el juego: endpoints de preguntas y de respuesta, y la pantalla que use
       `QuestionStage` (hoy `components/PlayScreen.tsx` es un placeholder).
-- [ ] **Borrar `app/styleguide/` antes del deploy.**
-- [ ] Ejecutar `supabase/schema.sql` en el proyecto de Supabase y cargar las env vars reales.
+- [ ] Cargar las preguntas reales del TP en `questions` (la tabla está vacía).
 - [ ] `/ranking` — todavía no existe; `/jugar` ya redirige ahí cuando el estado es `finished`.
 - [ ] Pantalla de juego con timer (reemplaza `components/PlayScreen.tsx`).
 - [ ] Endpoints de preguntas y de respuesta (con `toPublicQuestion()`).
