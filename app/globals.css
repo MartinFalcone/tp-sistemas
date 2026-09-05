@@ -114,6 +114,51 @@
       transparent 2px 5px
     );
   }
+
+  /*
+   * Slider de estimacion: una regla impresa con el cabezal como pulgar.
+   * El input mide 44px de alto para el area tactil aunque el riel sea fino.
+   * Los pseudo-elementos no se pueden agrupar: WebKit descarta la regla entera
+   * si encuentra un selector que no entiende, por eso van duplicados.
+   */
+  .papel-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 44px;
+    background: transparent;
+  }
+
+  .papel-slider::-webkit-slider-runnable-track {
+    height: 10px;
+    background: var(--papel);
+    border: 1px solid var(--tinta);
+  }
+
+  .papel-slider::-moz-range-track {
+    height: 10px;
+    background: var(--papel);
+    border: 1px solid var(--tinta);
+  }
+
+  .papel-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 34px;
+    /* (12px de riel con bordes - 34px de cabezal) / 2 */
+    margin-top: -11px;
+    border: 0;
+    border-radius: 2px;
+    background: var(--tinta);
+  }
+
+  .papel-slider::-moz-range-thumb {
+    width: 22px;
+    height: 34px;
+    border: 0;
+    border-radius: 2px;
+    background: var(--tinta);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

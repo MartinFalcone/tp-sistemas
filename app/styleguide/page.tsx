@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 
+import { QuestionsDemo } from "./QuestionsDemo";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -34,6 +35,8 @@ export default function StyleguidePage() {
   return (
     <Paper className="gap-8">
       <PaperHeader left="Styleguide" right="Borrar antes del deploy" />
+
+      <QuestionsDemo />
 
       <Section title="Paleta">
         <div className="grid grid-cols-5 gap-1">

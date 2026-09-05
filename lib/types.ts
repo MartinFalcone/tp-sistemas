@@ -385,6 +385,36 @@ export type GameStateResponse = z.infer<typeof gameStateResponseSchema>;
 /** Forma única de los errores de la API. `error` se muestra tal cual. */
 export type ApiError = { error: string };
 
+/**
+ * Lo que se manda cuando se acaba el tiempo sin responder.
+ *
+ * No coincide con ningún schema de `RESPONSE_SCHEMAS`, así que `grade()` lo
+ * corrige como incorrecto (ratio 0) para los siete tipos, sin casos especiales.
+ * Y como queda guardado tal cual en `answers.response`, después se puede
+ * distinguir "se le acabó el tiempo" de "respondió mal".
+ */
+export const TIMEOUT_RESPONSE = { timedOut: true } as const;
+
+/**
+ * Lo que el servidor devuelve después de corregir una respuesta.
+ *
+ * `correctText` es la respuesta correcta ya formateada para mostrar: el cliente
+ * nunca recibe el `answer` crudo, y solo llega acá, después de haber respondido.
+ */
+export const answerResultSchema = z.object({
+  isCorrect: z.boolean(),
+  ratio: z.number(),
+  /** Puntos que sumó esta pregunta. */
+  score: z.number().int(),
+  /** Puntaje acumulado después de esta pregunta. */
+  totalScore: z.number().int(),
+  /** Posición en el ranking. null si el ranking está oculto. */
+  position: z.number().int().positive().nullable(),
+  totalPlayers: z.number().int().nonnegative().nullable(),
+  correctText: z.string(),
+});
+export type AnswerResult = z.infer<typeof answerResultSchema>;
+
 // ---------------------------------------------------------------------------
 // Filas crudas de Postgres
 //

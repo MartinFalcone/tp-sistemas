@@ -63,6 +63,9 @@ Consecuencias prácticas:
   - Un solo tema. No hay modo oscuro.
   - Todo estado se distingue **sin depender del color**: forma + textura además del color.
   - Componentes base en `components/ui/`. Toda pantalla se envuelve en `<Paper>`.
+  - Las opciones se identifican por **forma** (▲ ◆ ● ■ ▬ ✚), no por letra ni por color:
+    se distinguen con daltonismo y el expositor puede decir "la del rombo" en voz alta.
+    El nombre de la forma va en el `aria-label`.
 - Mobile-first: escribir los estilos para pantalla chica y recién ahí agregar `sm:`/`md:`.
 - Inputs con `font-size` ≥ 16px para que iOS no haga zoom automático (ya forzado en
   `app/globals.css`).
@@ -272,8 +275,44 @@ wireframes, principios y autorrevisión).
   redondeadas, el crema y el modo oscuro que venían del template ya no están.
 - `/styleguide` para revisar en el celular.
 
+### Paso 5 — Componentes de respuesta ✅
+
+`components/questions/`, un componente por tipo, todos con la misma interfaz
+`{ question, onSubmit, disabled }`. `question` es una `PublicQuestion` estrechada por
+`type`, así que cada uno ve su `payload` sin un solo cast.
+
+| Archivo | Qué hace |
+| --- | --- |
+| `QuestionRenderer` | el `switch` sobre `type`; si se agrega un tipo y falta acá, el build falla |
+| `QuestionShell` | número, enunciado, `ProgressDots`, `Timer` y el slot |
+| `QuestionStage` | arma shell + renderer + envío + resultado. No habla con la red |
+| `QuestionResult` | la pantalla de resultado de 2,5 s |
+| `ChoiceButton` | opción de 56px para `single` y `multiple` |
+| `shared.ts` | la interfaz común y las formas de las opciones |
+
+Decisiones que importan:
+
+- **El cronómetro se calcula contra un `deadline` (timestamp), no descontando de un
+  contador.** No acumula deriva, y si el celular suspende la pantalla, al volver muestra
+  el tiempo real. En la partida el `deadline` lo fija el servidor: el celular no decide
+  cuánto tiempo tuvo.
+- **Al llegar a 0 se envía `TIMEOUT_RESPONSE` (`{ timedOut: true }`).** No coincide con
+  ningún schema de respuesta, así que `grade()` lo corrige como incorrecto en los siete
+  tipos sin casos especiales, y queda guardado en `answers.response` para poder
+  distinguir después "se le acabó el tiempo" de "respondió mal". Hay test.
+- **`QuestionStage` garantiza una sola respuesta por pregunta:** el timeout y un toque
+  pueden llegar casi juntos, y la base tiene `unique (player_id, question_id)`.
+- **`order` usa flechas, no drag.** En un celular el drag pelea contra el scroll y contra
+  el gesto de "atrás" del borde. Cada movimiento se anuncia en un `aria-live`.
+- **`match` etiqueta los pares con formas, no con colores.** Seis colores distinguibles
+  en un celular con reflejo no existen, y dejarían afuera a quien tenga daltonismo.
+- **El `hint` de la pregunta se muestra solo al errar**, y ocupa más lugar que el puntaje:
+  es una exposición académica, lo que importa es que entiendan el error.
+
 ### Pendiente
 
+- [ ] Conectar el juego: endpoints de preguntas y de respuesta, y la pantalla que use
+      `QuestionStage` (hoy `components/PlayScreen.tsx` es un placeholder).
 - [ ] **Borrar `app/styleguide/` antes del deploy.**
 - [ ] Ejecutar `supabase/schema.sql` en el proyecto de Supabase y cargar las env vars reales.
 - [ ] `/ranking` — todavía no existe; `/jugar` ya redirige ahí cuando el estado es `finished`.

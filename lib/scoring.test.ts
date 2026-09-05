@@ -6,7 +6,7 @@ import {
   normalizeAnswerText,
   normalizeNickname,
 } from "./normalize";
-import type { QuestionCore } from "./types";
+import { TIMEOUT_RESPONSE, type QuestionCore } from "./types";
 
 // ---------------------------------------------------------------------------
 // Helpers: preguntas mínimas de cada tipo
@@ -371,6 +371,38 @@ describe("grade / respuestas inválidas", () => {
         });
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Se acabó el tiempo
+// ---------------------------------------------------------------------------
+
+describe("TIMEOUT_RESPONSE", () => {
+  const questions: QuestionCore[] = [
+    single,
+    multiple,
+    truefalse,
+    order,
+    match,
+    slider,
+    text,
+  ];
+
+  it("puntúa 0 en los siete tipos, sin casos especiales en grade()", () => {
+    for (const question of questions) {
+      expect(grade(question, TIMEOUT_RESPONSE), question.type).toEqual({
+        isCorrect: false,
+        ratio: 0,
+      });
+    }
+  });
+
+  it("con ratio 0 no da puntos por más rápido que se haya cortado", () => {
+    const { ratio } = grade(truefalse, TIMEOUT_RESPONSE);
+    expect(
+      computeScore({ points: 1000, ratio, elapsedMs: 0, timeLimitMs: 20_000 }),
+    ).toBe(0);
   });
 });
 

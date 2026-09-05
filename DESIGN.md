@@ -193,6 +193,21 @@ Tu fila queda fijada abajo con banda sólida, para no buscarte entre 30.
 
 ---
 
+## Formas de las opciones
+
+Las opciones de `single` y `multiple` se identifican por **forma**, no por letra:
+
+    ▲ triángulo   ◆ rombo   ● círculo   ■ cuadrado   ▬ barra   ✚ cruz
+
+Tres razones, en orden de peso: se distinguen sin depender del color; el expositor puede
+decir "la del rombo" en voz alta sin ambigüedad; y son formas de matriz, no letras de
+formulario. El nombre de la forma va en el `aria-label` ("rombo: El rodillo de arrastre").
+
+En `match`, los pares armados comparten una de estas formas. Seis colores distinguibles
+en un celular con reflejo de aula no existen; seis formas sí.
+
+---
+
 ## El único momento de movimiento
 
 **El cabezal cruza la línea y deja impresa la respuesta.** Al terminar una pregunta, un
