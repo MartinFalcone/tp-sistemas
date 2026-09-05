@@ -46,13 +46,86 @@ Consecuencias prácticas:
 - **`SUPABASE_SECRET_KEY` / service role nunca se expone al cliente.** Solo se lee en
   código de servidor. Ninguna variable secreta lleva el prefijo `NEXT_PUBLIC_`; lo
   único público es `NEXT_PUBLIC_SUPABASE_URL`.
-- El cliente de Supabase con clave secreta vive en un módulo server-only
-  (`lib/supabase/server.ts` cuando se cree) y no se importa desde componentes cliente.
+- El cliente de Supabase con clave secreta vive en `lib/supabase.ts`, que importa
+  `server-only`: si un componente cliente lo importa, el build falla (verificado).
 - El panel de admin se protege con `ADMIN_PASSWORD` (solo servidor).
+- **La corrección y el puntaje se calculan SIEMPRE en el servidor.** El cliente manda
+  su respuesta y nada más: nunca manda puntaje, y nunca recibe `answer` antes de
+  responder. Todo endpoint que devuelva preguntas a un jugador pasa por
+  `toPublicQuestion()`, que borra el campo `answer`.
 - Mobile-first: escribir los estilos para pantalla chica y recién ahí agregar `sm:`/`md:`.
 - Inputs con `font-size` ≥ 16px para que iOS no haga zoom automático (ya forzado en
   `app/globals.css`).
 - Textos de UI en **español**.
+
+## Capa de datos
+
+### Base (`supabase/schema.sql`)
+
+Se pega y se ejecuta a mano en el SQL Editor de Supabase. Es idempotente y trae un
+bloque RESET comentado arriba de todo.
+
+| Tabla | Para qué |
+| --- | --- |
+| `questions` | preguntas: `type`, `payload`, `answer` (jsonb), `points`, `time_limit` |
+| `players` | jugadores: `nickname` + `nickname_key` único (normalizado) |
+| `answers` | una respuesta por jugador y pregunta (`unique (player_id, question_id)`) |
+| `game_state` | una sola fila con `id = 1`: `status`, `started_at`, `ends_at`, `reveal_ranking` |
+
+No usamos RLS con políticas ni auth de Supabase: todo el acceso es server-side con la
+secret key, que ignora RLS. Pero el script **activa RLS sin ninguna política** en las
+cuatro tablas, para que los roles `anon` y `authenticated` de PostgREST queden con cero
+acceso. Sin eso, cualquiera con la anon key podría leer `questions` — o sea, las
+respuestas correctas — antes de jugar.
+
+### Módulos
+
+| Archivo | Qué expone |
+| --- | --- |
+| `lib/types.ts` | discriminated union sobre `type` + schemas de zod, `PublicQuestion`, `toPublicQuestion()`, tipos `Database` para supabase-js |
+| `lib/supabase.ts` | **server-only**: `getSupabaseAdmin()` (lazy, memoizado) y `getAdminPassword()` |
+| `lib/scoring.ts` | `grade(question, response)` y `computeScore({...})`, puras |
+| `lib/normalize.ts` | `normalizeAnswerText()`, `normalizeNickname()`, `levenshtein()` |
+
+Por tipo de pregunta, `payload` es lo que ve el jugador, `answer` la respuesta correcta
+(solo servidor) y `response` lo que manda el jugador:
+
+| Tipo | `payload` | `answer` | `response` |
+| --- | --- | --- | --- |
+| `single` | `{ choices: [{id,text}] }` | `{ choiceId }` | `{ choiceId }` |
+| `multiple` | `{ choices: [{id,text}] }` | `{ choiceIds: [] }` | `{ choiceIds: [] }` |
+| `truefalse` | `{}` | `{ value: boolean }` | `{ value: boolean }` |
+| `order` | `{ items: [{id,text}] }` | `{ order: [id,...] }` | `{ order: [id,...] }` |
+| `match` | `{ left: [...], right: [...] }` | `{ pairs: {leftId: rightId} }` | `{ pairs: {...} }` |
+| `slider` | `{ min, max, step, unit }` | `{ value, tolerance }` | `{ value }` |
+| `text` | `{ placeholder }` | `{ accepted: [string,...] }` | `{ text }` |
+
+### Reglas de corrección (`grade`)
+
+Devuelve `{ isCorrect, ratio }`, con `isCorrect === (ratio === 1)`. Una respuesta mal
+formada es incorrecta, nunca una excepción: `grade()` valida `response` con zod adentro.
+
+- **single / truefalse**: acierto o error.
+- **multiple**: `(aciertos − falsos positivos) / cantidad de correctas`, mínimo 0.
+  Los ids repetidos se deduplican para que no inflen el puntaje.
+- **order**: ítems en la posición correcta, dividido por el más largo entre la respuesta
+  y la esperada (mandar ítems de más diluye el ratio en vez de regalar un 100%).
+- **match**: proporción de pares correctos sobre los pares esperados.
+- **slider**: 1 si `|valor − correcto| <= tolerancia`; después decae lineal hasta 0 al
+  doble de la tolerancia. Con `tolerance: 0` exige el valor exacto.
+- **text**: se normaliza (minúsculas, sin acentos, sin puntuación, espacios colapsados)
+  y se compara contra `accepted`. Además tolera typos por distancia de Levenshtein, con
+  un margen que **escala con el largo** de la respuesta esperada: 0 ediciones hasta 3
+  caracteres, 1 hasta 6, 2 de ahí en adelante. Un tope fijo de 2 daría por buena `"12"`
+  cuando la correcta es `"10"`.
+
+Puntaje (`computeScore`), estilo Kahoot — mitad acierto, mitad velocidad:
+
+```
+score = round(points * ratio * (0.5 + 0.5 * max(0, 1 - elapsedMs / timeLimitMs)))
+```
+
+`ratio = 0` da 0 puntos por rápido que se haya respondido.
 
 ## Variables de entorno
 
@@ -67,10 +140,12 @@ Ver `.env.example`. `.env.local` está en `.gitignore`; `.env.example` sí se co
 ## Comandos
 
 ```bash
-npm run dev     # desarrollo (Turbopack)
-npm run build   # build de producción
-npm run start   # servir el build
-npm run lint    # ESLint
+npm run dev         # desarrollo (Turbopack)
+npm run build       # build de producción
+npm run start       # servir el build
+npm run lint        # ESLint
+npm test            # tests unitarios (vitest, una pasada)
+npm run test:watch  # vitest en watch
 ```
 
 Nota: `build` usa el bundler estable (webpack), no Turbopack, para no depender de un
@@ -93,10 +168,26 @@ Esta sección se actualiza en **cada paso**.
 - Assets de ejemplo de create-next-app eliminados; `app/page.tsx` es un placeholder.
 - Git inicializado con commit inicial.
 
+### Paso 2 — Base de datos y capa de datos ✅
+
+- `supabase/schema.sql` con las 4 tablas, índices, trigger de `updated_at`, la fila
+  inicial de `game_state` y RLS activado sin políticas. **Falta ejecutarlo a mano en el
+  SQL Editor de Supabase.**
+- `lib/types.ts`: discriminated union sobre `type` con schemas de zod para los 7 tipos
+  de pregunta, `PublicQuestion` + `toPublicQuestion()`, y el tipo `Database` para tener
+  queries de supabase-js tipadas.
+- `lib/supabase.ts`: `getSupabaseAdmin()` con `server-only`, lazy y memoizado, con error
+  claro si faltan las env vars.
+- `lib/scoring.ts`: `grade()` y `computeScore()`, puras y sin I/O.
+- `lib/normalize.ts`: normalización de texto y apodos + Levenshtein.
+- `lib/scoring.test.ts`: 58 tests con vitest, incluyendo casos borde (división por cero,
+  ids repetidos, respuestas basura, tolerancia 0, typos en respuestas cortas).
+- Se subió `@types/node` de v20 a v24 porque vitest 5 lo pide como peer.
+
 ### Pendiente
 
-- [ ] Esquema de base en Supabase (partida, preguntas, jugadores, respuestas).
-- [ ] Cliente de Supabase server-only + schemas de zod compartidos.
+- [ ] Ejecutar `supabase/schema.sql` en el proyecto de Supabase y cargar las env vars reales.
+- [ ] Route Handlers en `/app/api` (ingreso, traer preguntas, responder, ranking, admin).
 - [ ] Pantalla de ingreso con apodo.
 - [ ] Pantalla de juego con timer.
 - [ ] Ranking final.
