@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { fetchJson } from "./fetchJson";
 import { gameStateResponseSchema, type GameStateResponse } from "./types";
 
 export type UseGameState = {
@@ -34,6 +35,11 @@ export function useGameState(
 
   // Con mala conexión una request puede tardar más que el intervalo. Sin esto se
   // acumularían pedidos encima de pedidos.
+  //
+  // Esta guarda es también la razón por la que el timeout de `fetchJson` no es
+  // opcional: un fetch que no resuelve nunca dejaría `inFlight` en true para
+  // siempre y el polling moriría en silencio, con la pantalla congelada en el
+  // último estado conocido y sin siquiera bajar `connected`.
   const inFlight = useRef(false);
 
   useEffect(() => {
@@ -49,17 +55,17 @@ export function useGameState(
           ? `/api/state?playerId=${encodeURIComponent(playerId)}`
           : "/api/state";
 
-        const response = await fetch(url, {
-          cache: "no-store",
+        // Sin reintentos acá: el próximo ciclo del intervalo ES el reintento, y
+        // encadenar esperas adentro solo desincronizaría el polling.
+        const next = await fetchJson(url, {
+          schema: gameStateResponseSchema,
           signal: controller.signal,
+          timeoutMs: 6000,
+          retries: 0,
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const parsed = gameStateResponseSchema.safeParse(await response.json());
-        if (!parsed.success) throw new Error("Respuesta inesperada de /api/state");
 
         if (cancelled) return;
-        setState(parsed.data);
+        setState(next);
         setConnected(true);
       } catch {
         // Incluye el abort del cleanup, que se descarta con `cancelled`.

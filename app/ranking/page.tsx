@@ -1,6 +1,6 @@
 import { RankingScreen } from "@/components/RankingScreen";
 
-export const metadata = { title: "Ranking — Impresoras de matriz de punto" };
+export const metadata = { title: "Ranking" };
 
 /**
  * `?tv=1` es el modo proyector: todo mucho más grande, hoja ancha, sin la fila

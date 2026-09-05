@@ -4,6 +4,8 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import clsx from "clsx";
 
+import { fetchJson } from "@/lib/fetchJson";
+
 /**
  * Marco del panel.
  *
@@ -23,7 +25,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   async function logout() {
-    await fetch("/api/admin/logout", { method: "POST" });
+    // Si falla, igual se va al login: la cookie vence sola en 12 h.
+    await fetchJson("/api/admin/logout", { method: "POST", retries: 1 }).catch(
+      () => {},
+    );
     router.replace("/admin/login");
     router.refresh();
   }

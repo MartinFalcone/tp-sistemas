@@ -4,14 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 
 import { Button } from "@/components/ui/Button";
+import { fetchJson, mensajeDeError } from "@/lib/fetchJson";
 import {
   QUESTION_TYPE_LABELS,
   questionSchema,
-  type ApiError,
   type Question,
   type QuestionInput,
   type QuestionType,
 } from "@/lib/types";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { Panel } from "./AdminShell";
 import { QuestionForm } from "./QuestionForm";
 import { emptyQuestion, toInput } from "./questionDefaults";
@@ -33,9 +34,10 @@ export function QuestionsAdmin() {
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch("/api/admin/questions", { cache: "no-store" });
-      if (!response.ok) throw new Error();
-      const body = (await response.json()) as { questions: unknown[] };
+      const body = await fetchJson<{ questions: unknown[] }>(
+        "/api/admin/questions",
+        { timeoutMs: 12000, retries: 2 },
+      );
 
       const parsed: Question[] = [];
       const brokenIds: string[] = [];
@@ -60,29 +62,19 @@ export function QuestionsAdmin() {
 
   async function call(
     url: string,
-    init: RequestInit,
+    init: { method: "POST" | "PATCH" | "DELETE"; body?: unknown },
     successMessage: string,
   ): Promise<boolean> {
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const response = await fetch(url, {
-        ...init,
-        headers: { "Content-Type": "application/json", ...init.headers },
-      });
-      if (!response.ok) {
-        const failure: ApiError = await response
-          .json()
-          .catch(() => ({ error: "No se pudo completar la acción." }));
-        setError(failure.error);
-        return false;
-      }
+      await fetchJson(url, { ...init, timeoutMs: 12000, retries: 2 });
       setNotice(successMessage);
       await load();
       return true;
-    } catch {
-      setError("No hay conexión con el servidor. Probá de nuevo.");
+    } catch (error) {
+      setError(mensajeDeError(error, "No se pudo completar la acción."));
       return false;
     } finally {
       setBusy(false);
@@ -95,12 +87,12 @@ export function QuestionsAdmin() {
       editing.mode === "create"
         ? await call(
             "/api/admin/questions",
-            { method: "POST", body: JSON.stringify(draft) },
+            { method: "POST", body: draft },
             "Pregunta creada.",
           )
         : await call(
             `/api/admin/questions/${editing.id}`,
-            { method: "PATCH", body: JSON.stringify(draft) },
+            { method: "PATCH", body: draft },
             "Pregunta guardada.",
           );
     if (ok) setEditing(null);
@@ -111,10 +103,10 @@ export function QuestionsAdmin() {
       `/api/admin/questions/${question.id}`,
       {
         method: "PATCH",
-        body: JSON.stringify({
+        body: {
           ...toInput(question),
           is_active: !question.is_active,
-        }),
+        },
       },
       question.is_active ? "Pregunta desactivada." : "Pregunta activada.",
     );
@@ -134,7 +126,7 @@ export function QuestionsAdmin() {
       "/api/admin/questions/reorder",
       {
         method: "PATCH",
-        body: JSON.stringify({ ids: reordered.map((q) => q.id) }),
+        body: { ids: reordered.map((q) => q.id) },
       },
       "Orden actualizado.",
     );
@@ -146,11 +138,11 @@ export function QuestionsAdmin() {
       "/api/admin/questions",
       {
         method: "POST",
-        body: JSON.stringify({
+        body: {
           ...copy,
           prompt: `${copy.prompt} (copia)`,
           is_active: false,
-        }),
+        },
       },
       "Pregunta duplicada, desactivada por las dudas.",
     );
@@ -199,7 +191,7 @@ export function QuestionsAdmin() {
       "/api/admin/questions/import",
       {
         method: "POST",
-        body: JSON.stringify({ questions: parsed, replace }),
+        body: { questions: parsed, replace },
       },
       replace ? "Preguntas reemplazadas." : "Preguntas agregadas.",
     );
@@ -275,7 +267,7 @@ export function QuestionsAdmin() {
           }
         >
           {loading ? (
-            <p className="text-carbon">Cargando…</p>
+            <TableSkeleton rows={6} />
           ) : questions.length === 0 ? (
             <p className="text-carbon">
               Todavía no hay preguntas. Creá la primera o importá un backup.

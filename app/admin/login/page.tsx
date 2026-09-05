@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { LoginForm } from "@/components/admin/LoginForm";
 import { Paper, PaperHeader } from "@/components/ui/Paper";
 
-export const metadata = { title: "Panel — Acceso" };
+export const metadata = { title: "Panel · Acceso" };
 
 export default function LoginPage() {
   return (

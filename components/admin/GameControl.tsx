@@ -7,7 +7,8 @@ import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "./AdminShell";
 import type { AdminStats } from "@/app/api/admin/stats/route";
-import type { ApiError, GameStatus } from "@/lib/types";
+import { fetchJson, mensajeDeError } from "@/lib/fetchJson";
+import type { GameStatus } from "@/lib/types";
 
 const POLL_MS = 3000;
 const DURATIONS = [5, 10, 15, 20, 30, 45] as const;
@@ -32,9 +33,8 @@ export function GameControl() {
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch("/api/admin/stats", { cache: "no-store" });
-      if (!response.ok) throw new Error();
-      setStats(await response.json());
+      // Sin reintentos: el poll de 3 s ya es el reintento.
+      setStats(await fetchJson<AdminStats>("/api/admin/stats", { timeoutMs: 8000 }));
     } catch {
       // Un poll que falla no borra los contadores que ya teníamos.
     }
@@ -53,22 +53,16 @@ export function GameControl() {
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/admin/game", {
+      await fetchJson("/api/admin/game", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body,
+        timeoutMs: 12000,
+        retries: 2,
       });
-      if (!response.ok) {
-        const failure: ApiError = await response.json().catch(() => ({
-          error: "No se pudo aplicar el cambio.",
-        }));
-        setError(failure.error);
-        return;
-      }
       setConfirmText("");
       await load();
-    } catch {
-      setError("No hay conexión con el servidor. Probá de nuevo.");
+    } catch (error) {
+      setError(mensajeDeError(error, "No se pudo aplicar el cambio."));
     } finally {
       setBusy(false);
     }

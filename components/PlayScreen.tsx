@@ -4,16 +4,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { QuestionStage } from "@/components/questions/QuestionStage";
 import { Button } from "@/components/ui/Button";
+import { QuestionSkeleton } from "@/components/ui/Skeleton";
 import {
   readProgress,
   writeProgress,
   type StoredProgress,
 } from "@/lib/progress";
+import { fetchJson, mensajeDeError } from "@/lib/fetchJson";
 import { useAnswerQueue } from "@/lib/useAnswerQueue";
 import {
   publicQuestionSchema,
   type AnswerResult,
-  type ApiError,
   type PublicQuestion,
 } from "@/lib/types";
 
@@ -56,21 +57,21 @@ export function PlayScreen({
   // -- Las preguntas, una sola vez -------------------------------------------
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     async function load() {
       setLoadError(null);
       try {
-        const response = await fetch("/api/questions", { cache: "no-store" });
-        const body: unknown = await response.json().catch(() => null);
+        // Es el único pedido que no se repite solo: si falla, el alumno se queda
+        // sin partida. Cuatro reintentos con backoff largo antes de rendirse.
+        const body = await fetchJson<{ questions?: unknown[] }>("/api/questions", {
+          timeoutMs: 10000,
+          retries: 4,
+          retryDelaysMs: [500, 1200, 2500, 4000],
+          signal: controller.signal,
+        });
 
-        if (!response.ok) {
-          throw new Error(
-            (body as ApiError | null)?.error ??
-              "No se pudieron cargar las preguntas.",
-          );
-        }
-
-        const raw = (body as { questions?: unknown[] } | null)?.questions ?? [];
+        const raw = body?.questions ?? [];
         // El servidor ya sacó `answer`, así que se valida sin ese campo.
         const parsed = raw.flatMap((item) => {
           const question = publicQuestionSchema.safeParse(item);
@@ -89,17 +90,14 @@ export function PlayScreen({
         setQuestions(parsed);
       } catch (error) {
         if (cancelled) return;
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : "No se pudieron cargar las preguntas.",
-        );
+        setLoadError(mensajeDeError(error, "No se pudieron cargar las preguntas."));
       }
     }
 
     void load();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [reloadToken]);
 
@@ -175,7 +173,7 @@ export function PlayScreen({
   }
 
   if (!questions || !progress) {
-    return <Centered>Cargando las preguntas…</Centered>;
+    return <QuestionSkeleton />;
   }
 
   // -- Fin: por haber respondido todo, o por el deadline global --------------
@@ -186,7 +184,7 @@ export function PlayScreen({
     return <FinishedScreen playerId={playerId} pendingCount={pendingCount} />;
   }
 
-  if (!current) return <Centered>Cargando…</Centered>;
+  if (!current) return <QuestionSkeleton />;
 
   // El cronómetro de la pregunta nunca puede pasarse del cierre de la partida.
   const questionDeadline = progress.startedAt + current.time_limit * 1000;

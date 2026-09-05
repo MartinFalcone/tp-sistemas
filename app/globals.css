@@ -116,6 +116,33 @@
   }
 
   /*
+   * Esqueleto de carga: la grilla de agujas todavia sin imprimir.
+   *
+   * No es un shimmer gris: son los mismos puntos apagados que usa DotDigit para
+   * dejar ver la matriz. Asi "cargando" se lee como papel en blanco esperando al
+   * cabezal, y no como un widget prestado de otra app.
+   */
+  .papel-puntos {
+    background-image: radial-gradient(
+      circle at 50% 50%,
+      var(--filete) 0 1px,
+      transparent 1px
+    );
+    background-size: 5px 5px;
+    animation: papel-imprimiendo 1.4s ease-in-out infinite;
+  }
+
+  @keyframes papel-imprimiendo {
+    0%,
+    100% {
+      opacity: 0.5;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  /*
    * Slider de estimacion: una regla impresa con el cabezal como pulgar.
    * El input mide 44px de alto para el area tactil aunque el riel sea fino.
    * Los pseudo-elementos no se pueden agrupar: WebKit descarta la regla entera

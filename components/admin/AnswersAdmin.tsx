@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
 
+import { fetchJson, mensajeDeError } from "@/lib/fetchJson";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { Panel } from "./AdminShell";
 
 type AnswerRow = {
@@ -45,17 +47,15 @@ export function AnswersAdmin() {
       const url = questionId
         ? `/api/admin/answers?questionId=${encodeURIComponent(questionId)}`
         : "/api/admin/answers";
-      const response = await fetch(url, { cache: "no-store" });
-      if (!response.ok) throw new Error();
-      const body = (await response.json()) as {
-        rows: AnswerRow[];
-        questions: QuestionRef[];
-      };
+      const body = await fetchJson<{ rows: AnswerRow[]; questions: QuestionRef[] }>(
+        url,
+        { timeoutMs: 12000, retries: 2 },
+      );
       setRows(body.rows);
       setQuestions(body.questions);
       setError(null);
-    } catch {
-      setError("No se pudieron cargar las respuestas. Probá de nuevo.");
+    } catch (error) {
+      setError(mensajeDeError(error, "No se pudieron cargar las respuestas."));
     } finally {
       setLoading(false);
     }
@@ -90,11 +90,13 @@ export function AnswersAdmin() {
         </select>
       }
     >
-      {error ? (
+      {loading ? (
+        <TableSkeleton rows={6} />
+      ) : error ? (
         <p role="alert" className="border border-cinta px-3 py-2 text-sm text-cinta">
           {error}
         </p>
-      ) : rows.length === 0 && !loading ? (
+      ) : rows.length === 0 ? (
         <p className="text-carbon">Todavía nadie respondió.</p>
       ) : (
         <div className="overflow-x-auto">

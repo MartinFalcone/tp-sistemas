@@ -7,6 +7,8 @@ import { motion, useReducedMotion } from "framer-motion";
 import { DotNumber } from "@/components/DotDigit";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
 import { Paper, PaperHeader } from "@/components/ui/Paper";
+import { RankingSkeleton } from "@/components/ui/Skeleton";
+import { fetchJson } from "@/lib/fetchJson";
 import { readStoredPlayer } from "@/lib/player";
 import {
   rankingResponseSchema,
@@ -43,21 +45,20 @@ export function RankingScreen({ tv }: { tv: boolean }) {
       if (inFlight) return;
       inFlight = true;
       try {
-        const response = await fetch(`/api/ranking${tv ? "?tv=1" : ""}`, {
-          cache: "no-store",
+        // Sin reintentos internos: el intervalo de 3 s ya es el reintento.
+        const next = await fetchJson(`/api/ranking${tv ? "?tv=1" : ""}`, {
+          schema: rankingResponseSchema,
           signal: controller.signal,
+          timeoutMs: 8000,
+          retries: 0,
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const parsed = rankingResponseSchema.safeParse(await response.json());
-        if (!parsed.success) throw new Error("Respuesta inesperada");
         if (cancelled) return;
 
-        setData(parsed.data);
+        setData(next);
         setConnected(true);
 
         // Ya no hay nada más que esperar.
-        if (parsed.data.status === "finished" && timer) {
+        if (next.status === "finished" && timer) {
           clearInterval(timer);
           timer = null;
         }
@@ -101,14 +102,16 @@ export function RankingScreen({ tv }: { tv: boolean }) {
         left={finished ? "Listado final" : "Ranking en curso"}
         right={
           <span className="flex items-center gap-2">
-            {data ? `${rows.length} jugadores` : ""}
+            {data
+              ? `${rows.length} ${rows.length === 1 ? "jugador" : "jugadores"}`
+              : ""}
             <ConnectionBadge connected={connected} />
           </span>
         }
       />
 
       {!data ? (
-        <Centered tv={tv}>Cargando el ranking…</Centered>
+        <RankingSkeleton rows={tv ? 8 : 6} />
       ) : data.hidden ? (
         <Centered tv={tv}>El ranking se muestra al final.</Centered>
       ) : rows.length === 0 ? (

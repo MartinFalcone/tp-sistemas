@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!--
+    La matriz de agujas, no una impresora dibujada: a 16px un aparato con
+    detalles se vuelve una mancha, y una grilla de puntos no. Fondo de tinta,
+    puntos en papel, y uno en rojo de cinta — la bicolor de la maquina.
+    Ver DESIGN.md para los colores.
+  -->
+  <rect width="32" height="32" fill="#1b1a17"/>
+  <g fill="#f2f1ea">
+    <circle cx="8"  cy="8"  r="2.6"/>
+    <circle cx="16" cy="8"  r="2.6"/>
+    <circle cx="24" cy="8"  r="2.6"/>
+    <circle cx="8"  cy="16" r="2.6"/>
+    <circle cx="24" cy="16" r="2.6"/>
+    <circle cx="8"  cy="24" r="2.6"/>
+    <circle cx="16" cy="24" r="2.6"/>
+    <circle cx="24" cy="24" r="2.6"/>
+  </g>
+  <circle cx="16" cy="16" r="2.6" fill="#b4321f"/>
+</svg>

@@ -68,7 +68,10 @@ Consecuencias prácticas:
     El nombre de la forma va en el `aria-label`.
 - Mobile-first: escribir los estilos para pantalla chica y recién ahí agregar `sm:`/`md:`.
 - Inputs con `font-size` ≥ 16px para que iOS no haga zoom automático (ya forzado en
-  `app/globals.css`).
+  `app/globals.css`). **Por eso el viewport NO lleva `maximumScale: 1`**: con el zoom
+  automático resuelto por el tamaño de fuente, bloquear la escala solo dejaba afuera a
+  quien necesita agrandar para leer.
+- **Ningún `fetch` suelto en el cliente.** Todos pasan por `lib/fetchJson.ts`.
 - Textos de UI en **español**.
 
 ## Capa de datos
@@ -102,6 +105,7 @@ respuestas correctas — antes de jugar.
 | `lib/profanity.ts` | `containsProfanity()` — lista corta, dos niveles |
 | `lib/player.ts` | jugador en `localStorage` (cliente) |
 | `lib/useGameState.ts` | polling de `/api/state` (cliente) |
+| `lib/fetchJson.ts` | **el único fetch del cliente**: timeout, reintentos y mensaje en español |
 
 Por tipo de pregunta, `payload` es lo que ve el jugador, `answer` la respuesta correcta
 (solo servidor) y `response` lo que manda el jugador:
@@ -132,6 +136,9 @@ Por tipo de pregunta, `payload` es lo que ve el jugador, `answer` la respuesta c
 | `/admin` | control de partida, contadores en vivo y QR |
 | `/admin/preguntas` | CRUD, reordenar, vista previa, exportar/importar |
 | `/admin/respuestas` | qué respondió cada jugador, filtrable por pregunta |
+| `not-found.tsx` | 404, pensado para el que tipeó mal la URL en el celular |
+| `error.tsx` × 5 | un Error Boundary por ruta, más `global-error.tsx` |
+| `opengraph-image.tsx` | la vista previa del link en WhatsApp, generada en el build |
 | `/api/admin/*` | todo detrás del middleware |
 
 `/api/join` es **idempotente por apodo**: si el `nickname_key` ya existe devuelve
@@ -478,6 +485,67 @@ Verificado con las 12 ya cargadas en la base (79 comprobaciones):
   (`near leter quality`) y las dos formas en español; rechaza `letter quality`, `laser`
   y el vacío.
 
+### Paso 10 — Robustez, metadata y deploy ✅
+
+**Todo fetch del cliente pasa por `lib/fetchJson.ts`** (12 llamadas migradas). Da tres
+cosas que antes había que acordarse en cada pantalla: timeout, reintentos con backoff
+solo para lo que puede mejorar solo (red, timeout, 5xx — nunca un 4xx), y un `.message`
+en español listo para mostrar.
+
+- **El timeout arregló un cuelgue real.** `useGameState` tiene una guarda `inFlight`
+  para no encimar pedidos. Con datos móviles un socket puede quedar colgado sin
+  resolver ni rechazar: el `fetch` no termina nunca, `inFlight` queda en `true` para
+  siempre y **el polling muere en silencio** — pantalla congelada en el último estado
+  conocido, sin error y sin siquiera bajar `connected`. Hay test.
+- Reintentos según lo que cuesta perder el pedido: 4 en `/api/questions` (es el único
+  que no se repite solo), 3 en `/api/join` (seguro porque es idempotente por apodo), 2
+  en las acciones del admin, **0 en los polls** — ahí el intervalo ya es el reintento.
+
+**Esqueletos en vez de spinners** (`components/ui/Skeleton.tsx`): la grilla de agujas
+sin imprimir (`.papel-puntos`), con la forma de lo que viene, así no salta el layout.
+
+**Un Error Boundary por ruta** (`/`, `/jugar`, `/ranking`, panel y login) más
+`global-error.tsx` y `not-found.tsx`. Cada mensaje dice **qué hacer**, no qué pasó; el
+de la partida promete que no se perdió nada, y es cierto. `global-error` lleva los
+estilos inline: reemplaza al layout raíz, así que no puede contar con `globals.css`.
+
+**Metadata**: `metadataBase` que sale sola de `VERCEL_PROJECT_PRODUCTION_URL`, template
+de títulos, `appleWebApp`, `robots: noindex` (es una actividad de una clase), favicon
+propio (`app/icon.svg`, la matriz de agujas con una en rojo) y `app/opengraph-image.tsx`
+para que el link se vea bien en WhatsApp. La imagen se prerenderiza en el build y se
+sirve estática; la tipografía va vendorizada en `assets/` (OFL) para no depender de la
+red al generarla. Satori no soporta `border-style: double` ni `color-mix`: el filete
+doble son tres divs apilados.
+
+**`npm run check:bundle`** busca los valores de `SUPABASE_SECRET_KEY` y `ADMIN_PASSWORD`
+en `.next/static`, que es literalmente lo que baja un celular. Distingue el **valor**
+(filtración, corta) del **nombre** (puede estar en un mensaje de error, avisa nomás).
+
+#### Verificado en Chrome, no por API
+
+Un ensayo completo con **dos jugadores simultáneos en contextos aislados** más el admin,
+tocando la UI real: 33 comprobaciones, todas en verde.
+
+- El admin entra, abre sala, ve subir el contador a 2, inicia, cierra.
+- Los dos juegan las 12 preguntas de los 7 tipos, en paralelo.
+- **Corte de conexión de 10 s en el medio de una pregunta**: aparece el aviso, el
+  enunciado y los controles siguen usables, se responde **estando offline**, la
+  respuesta queda encolada y se envía al volver. **24 de 24 respuestas guardadas: no se
+  perdió ninguna.**
+- Los puntajes de la base coinciden con el ranking al punto, y ninguna pantalla
+  scrollea en horizontal ni en el celular ni en el proyector.
+
+**Lighthouse mobile** (build de producción, throttling 4G): performance **95-98**,
+accesibilidad **100**, buenas prácticas **100**. SEO da 60 a propósito, por el
+`noindex`. Lo que subió la accesibilidad de 92 a 100 fue sacar `maximumScale: 1`.
+
+Dos cosas encontradas mirando capturas de pantalla, que ninguna prueba por API detecta:
+el ranking decía **"1 JUGADORES"** en singular, y confirmado que el `match` de 5 pares y
+el `order` de 5 ítems entran cómodos en 390×844.
+
+**`README.md`** con el checklist del día, cómo correr en local, las variables, cómo
+ejecutar el schema y el seed, y el paso a paso de Vercel.
+
 ### Pendiente
 
 - [x] ~~Ejecutar `supabase/schema.sql` y cargar las env vars reales.~~ Hecho y verificado
@@ -492,10 +560,13 @@ Verificado con las 12 ya cargadas en la base (79 comprobaciones):
       desarrollo, antes de cargar el contenido final. Para repetirlo: abrir el panel en
       `http://<ip-de-la-pc>:3000/admin` (**no** en `localhost`, porque el QR se arma con
       `window.location.origin` y el celular no resuelve `localhost`).
-- [ ] **Deploy a Vercel.** No hay remote de git todavía. Es lo único que falta para que
-      la app exista fuera de esta máquina.
-- [ ] **Las pantallas se vieron una vez en el navegador, no se auditaron.** El panel de
-      admin y el ranking en proyector siguen sin una pasada con ojos.
-- [ ] Ensayo general con el contenido final: abrir la partida, jugar las 12 desde dos
-      celulares y proyectar el ranking. Ojo con la #4 (`match`, 5 pares) y la #3
-      (`order`, 5 ítems), que son las más apretadas en pantalla chica.
+- [x] ~~Ensayo general con el contenido final.~~ Hecho en Chrome, dos jugadores
+      simultáneos, 33 comprobaciones. Ver "Paso 10".
+- [x] ~~Las pantallas nunca se miraron con ojos.~~ Hecho por capturas de las 10
+      pantallas principales; salieron dos correcciones.
+- [ ] **`git push` y deploy en Vercel.** El remote ya está configurado
+      (`github.com/MartinFalcone/tp-sistemas`) y el README tiene el paso a paso, pero
+      el push y el import los tiene que hacer una persona.
+- [ ] **Un ensayo con celulares de verdad.** Chrome emulado no reproduce el teclado de
+      iOS tapando el campo de texto, ni una red que se degrada de a poco en vez de
+      cortarse del todo, ni el brillo de la pantalla en un aula con sol.

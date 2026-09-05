@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { fetchJson, HttpError, ShapeError } from "./fetchJson";
 import {
   readQueue,
   writeQueue,
@@ -9,34 +10,31 @@ import {
 } from "./progress";
 import { answerResultSchema, type AnswerResult } from "./types";
 
-/** Espera entre reintentos: dos reintentos después del intento inicial. */
-const RETRY_DELAYS_MS = [600, 1800];
+/** Reintentos después del intento inicial, con la espera de `fetchJson`. */
+const SUBMIT_RETRIES = 2;
 /** Cada cuánto se vuelve a intentar lo que quedó encolado. */
 const FLUSH_INTERVAL_MS = 5000;
+/**
+ * Enviar la respuesta es lo único que no se puede perder, así que se le da más
+ * aire que a un poll antes de darla por caída.
+ */
+const SUBMIT_TIMEOUT_MS = 10000;
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Un 4xx o una respuesta con forma rara no se arreglan reintentando. */
+function esPermanente(error: unknown): boolean {
+  return (
+    (error instanceof HttpError && error.isPermanent) || error instanceof ShapeError
+  );
+}
 
-/** Un 4xx no se arregla reintentando; un 5xx o un corte de red sí. */
-class PermanentError extends Error {}
-
-async function postAnswer(payload: QueuedAnswer): Promise<AnswerResult> {
-  const response = await fetch("/api/answer", {
+function postAnswer(payload: QueuedAnswer, retries: number): Promise<AnswerResult> {
+  return fetchJson("/api/answer", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    cache: "no-store",
-    body: JSON.stringify(payload),
+    body: payload,
+    schema: answerResultSchema,
+    timeoutMs: SUBMIT_TIMEOUT_MS,
+    retries,
   });
-
-  if (!response.ok) {
-    if (response.status >= 400 && response.status < 500) {
-      throw new PermanentError(`HTTP ${response.status}`);
-    }
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  const parsed = answerResultSchema.safeParse(await response.json());
-  if (!parsed.success) throw new PermanentError("Respuesta inesperada");
-  return parsed.data;
 }
 
 export type UseAnswerQueue = {
@@ -79,19 +77,15 @@ export function useAnswerQueue(): UseAnswerQueue {
 
   const submit = useCallback(
     async (payload: QueuedAnswer): Promise<AnswerResult | null> => {
-      for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
-        try {
-          return await postAnswer(payload);
-        } catch (error) {
-          // La partida cerró, la pregunta no existe, el jugador no existe:
-          // reintentar no cambia nada y encolarlo tampoco.
-          if (error instanceof PermanentError) return null;
-          if (attempt < RETRY_DELAYS_MS.length) {
-            await sleep(RETRY_DELAYS_MS[attempt]);
-          }
-        }
+      try {
+        return await postAnswer(payload, SUBMIT_RETRIES);
+      } catch (error) {
+        // La partida cerró, la pregunta no existe, el jugador no existe:
+        // reintentar no cambia nada y encolarlo tampoco.
+        if (esPermanente(error)) return null;
       }
 
+      // Se agotaron los intentos por red: queda encolada y el alumno sigue.
       persist([...pendingRef.current, payload]);
       return null;
     },
@@ -108,10 +102,11 @@ export function useAnswerQueue(): UseAnswerQueue {
       for (const item of [...pendingRef.current]) {
         if (cancelled) return;
         try {
-          await postAnswer(item);
+          // Sin reintentos internos: el intervalo de vaciado ES el reintento.
+          await postAnswer(item, 0);
         } catch (error) {
           // Permanente: se saca de la cola, no se va a poder enviar nunca.
-          if (!(error instanceof PermanentError)) return; // sigue sin conexión
+          if (!esPermanente(error)) return; // sigue sin conexión
         }
         if (cancelled) return;
         persist(pendingRef.current.filter((queued) => queued !== item));

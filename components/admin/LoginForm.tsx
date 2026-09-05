@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Paper, PaperHeader } from "@/components/ui/Paper";
-import type { ApiError } from "@/lib/types";
+import { fetchJson, mensajeDeError } from "@/lib/fetchJson";
 
 export function LoginForm() {
   const router = useRouter();
@@ -26,25 +26,18 @@ export function LoginForm() {
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/admin/login", {
+      await fetchJson("/api/admin/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: { password },
+        timeoutMs: 12000,
+        retries: 2,
       });
-
-      if (!response.ok) {
-        const failure: ApiError = await response
-          .json()
-          .catch(() => ({ error: "No se pudo entrar." }));
-        setError(failure.error);
-        return;
-      }
 
       const next = params.get("next");
       router.replace(next && next.startsWith("/admin") ? next : "/admin");
       router.refresh();
-    } catch {
-      setError("No hay conexión con el servidor. Probá de nuevo.");
+    } catch (error) {
+      setError(mensajeDeError(error, "No se pudo entrar."));
     } finally {
       setBusy(false);
     }

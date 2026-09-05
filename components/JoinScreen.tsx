@@ -9,11 +9,8 @@ import {
   writeStoredPlayer,
   type StoredPlayer,
 } from "@/lib/player";
-import {
-  joinResponseSchema,
-  NICKNAME_MAX_LENGTH,
-  type ApiError,
-} from "@/lib/types";
+import { fetchJson, mensajeDeError } from "@/lib/fetchJson";
+import { joinResponseSchema, NICKNAME_MAX_LENGTH } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Paper, PaperHeader } from "@/components/ui/Paper";
@@ -62,37 +59,25 @@ export function JoinScreen() {
     setError(null);
 
     try {
-      const response = await fetch("/api/join", {
+      // Reintentar es seguro: /api/join es idempotente por apodo. Si el primer
+      // intento llegó y se perdió la respuesta, el segundo devuelve el mismo
+      // jugador en vez de crear otro.
+      const player = await fetchJson("/api/join", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({ nickname: trimmed }),
+        body: { nickname: trimmed },
+        schema: joinResponseSchema,
+        timeoutMs: 10000,
+        retries: 3,
       });
 
-      const body: unknown = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        const message = (body as ApiError | null)?.error;
-        setError(
-          message ??
-            "No se pudo entrar a la partida. Esperá unos segundos y tocá Entrar de nuevo.",
-        );
-        return;
-      }
-
-      const parsed = joinResponseSchema.safeParse(body);
-      if (!parsed.success) {
-        setError(
-          "El servidor respondió algo inesperado. Recargá la página y probá de nuevo.",
-        );
-        return;
-      }
-
-      writeStoredPlayer(parsed.data);
+      writeStoredPlayer(player);
       router.push("/jugar");
-    } catch {
+    } catch (error) {
       setError(
-        "No hay conexión con el servidor. Revisá tus datos móviles y tocá Entrar de nuevo.",
+        mensajeDeError(
+          error,
+          "No se pudo entrar a la partida. Esperá unos segundos y tocá Entrar de nuevo.",
+        ),
       );
     } finally {
       setSubmitting(false);

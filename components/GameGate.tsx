@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { readStoredPlayer, type StoredPlayer } from "@/lib/player";
 import { useGameState } from "@/lib/useGameState";
 import { Paper, PaperHeader } from "@/components/ui/Paper";
+import { QuestionSkeleton } from "@/components/ui/Skeleton";
 import { ConnectionBadge } from "./ConnectionBadge";
 import { PlayScreen } from "./PlayScreen";
 import { WaitingRoom } from "./WaitingRoom";
@@ -40,7 +41,7 @@ export function GameGate() {
   if (player === undefined) {
     return (
       <Shell>
-        <Centered>Cargando…</Centered>
+        <QuestionSkeleton />
       </Shell>
     );
   }
@@ -56,11 +57,14 @@ export function GameGate() {
   return (
     <Shell nickname={player.nickname} connected={connected}>
       {state === null ? (
-        <Centered>
-          {loading
-            ? "Conectando con la partida…"
-            : "No se pudo conectar con la partida. Se reintenta solo, no cierres esta pantalla."}
-        </Centered>
+        loading ? (
+          <QuestionSkeleton />
+        ) : (
+          <Centered>
+            No se pudo conectar con la partida. Se reintenta solo, no cierres
+            esta pantalla.
+          </Centered>
+        )
       ) : state.status === "lobby" ? (
         <WaitingRoom playerCount={state.playerCount} />
       ) : state.status === "running" ? (
