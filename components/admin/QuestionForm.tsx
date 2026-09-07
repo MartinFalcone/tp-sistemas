@@ -16,7 +16,7 @@ import {
   type QuestionInput,
   type QuestionType,
 } from "@/lib/types";
-import { emptyQuestion, nextId } from "./questionDefaults";
+import { cleanInput, emptyQuestion, nextId } from "./questionDefaults";
 
 /**
  * Formulario de una pregunta. Cambia de forma según el tipo.
@@ -36,7 +36,9 @@ export function QuestionForm({
   onCancel: () => void;
   saving: boolean;
 }) {
-  const [draft, setDraft] = useState<QuestionInput>(initial);
+  // `cleanInput` corre acá y no al guardar: una opción huérfana no se ve en el
+  // formulario, así que hay que sacarla antes de que el schema la rechace.
+  const [draft, setDraft] = useState<QuestionInput>(() => cleanInput(initial));
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
 
@@ -490,13 +492,19 @@ function TypeFields({
       };
 
       const removePair = (id: string) => {
+        // El ítem de la derecha se borra por SU id, no por el de la izquierda.
+        // En una pregunta sembrada los dos lados tienen slugs distintos
+        // ("tractor" → "fn-papel"), así que filtrar la derecha por el id de la
+        // izquierda no borraba nada: la opción quedaba huérfana en el payload y
+        // el alumno la seguía viendo como una respuesta más.
+        const targetId = targetOf(id);
         const pairs = { ...current.answer.pairs };
         delete pairs[id];
         update({
           ...current,
           payload: {
             left: left.filter((item) => item.id !== id),
-            right: right.filter((item) => item.id !== id),
+            right: right.filter((item) => item.id !== targetId),
           },
           answer: { pairs },
         });

@@ -105,4 +105,27 @@ export function toInput(question: Question): QuestionInput {
   return input as QuestionInput;
 }
 
+/**
+ * Limpia lo que una versión anterior pudo haber dejado mal guardado.
+ *
+ * Hoy hace una sola cosa: en un `match`, tira las opciones de la derecha a las
+ * que no apunta ningún par. Un bug de `removePair` borraba el ítem de la
+ * izquierda pero dejaba el de la derecha, y esa opción huérfana le seguía
+ * apareciendo al alumno.
+ *
+ * Tiene que correr al abrir el formulario, no solo al guardar: el formulario
+ * dibuja una fila por cada ítem de la IZQUIERDA, así que una opción huérfana es
+ * invisible ahí. Sin esta limpieza, el schema la rechazaría con un error sobre
+ * algo que no se ve y la pregunta quedaría imposible de guardar.
+ */
+export function cleanInput(input: QuestionInput): QuestionInput {
+  if (input.type !== "match") return input;
+
+  const usados = new Set(Object.values(input.answer.pairs));
+  const right = input.payload.right.filter((item) => usados.has(item.id));
+  if (right.length === input.payload.right.length) return input;
+
+  return { ...input, payload: { ...input.payload, right } };
+}
+
 export { MAX_CHOICES };

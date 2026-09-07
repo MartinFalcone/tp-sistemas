@@ -636,6 +636,17 @@ export const questionInputSchema = questionInputUnion.superRefine((q, ctx) => {
           "pairs",
         ]);
       }
+      // Al revés también: una opción de la derecha a la que no apunta ningún par
+      // es una respuesta que el alumno ve y que no puede unir con nada. No hay
+      // forma de crearla a propósito desde el formulario, así que siempre es lo
+      // que quedó de un par borrado.
+      const usados = new Set(Object.values(q.answer.pairs));
+      if (rightIds.some((id) => !usados.has(id))) {
+        fail(
+          "Sobra una opción en la columna derecha: no le corresponde ningún par.",
+          ["payload", "right"],
+        );
+      }
       break;
     }
 
