@@ -62,11 +62,31 @@ export async function POST(request: Request) {
       }
 
       case "start": {
-        const startedAt = new Date();
+        // `started_at` identifica la ronda: cada celular lo guarda junto a su
+        // progreso y descarta lo que sea de otra. Por eso "Iniciar" con la
+        // partida YA corriendo no lo pisa — si lo hiciera, tocar el botón para
+        // corregir la duración mandaría a los 30 alumnos de vuelta a la
+        // pregunta 1 en la mitad del juego. Para empezar de nuevo de verdad
+        // está "Abrir sala", que lo pone en null.
+        const current = await db
+          .from("game_state")
+          .select("status, started_at")
+          .eq("id", 1)
+          .maybeSingle();
+        if (current.error) throw current.error;
+
+        const enCurso =
+          current.data && current.data.status === "running"
+            ? current.data.started_at
+            : null;
+
+        const startedAt = enCurso ? new Date(enCurso) : new Date();
+        // La duración se cuenta desde ahora igual: es lo que el expositor ve al
+        // tocar el botón.
         const endsAt =
           action.minutes === null
             ? null
-            : new Date(startedAt.getTime() + action.minutes * 60_000);
+            : new Date(Date.now() + action.minutes * 60_000);
 
         const { error } = await db
           .from("game_state")

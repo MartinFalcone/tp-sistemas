@@ -455,6 +455,12 @@ export type PlayerStanding = z.infer<typeof playerStandingSchema>;
 /** Lo que devuelve `GET /api/state`. */
 export const gameStateResponseSchema = z.object({
   status: gameStatusSchema,
+  /**
+   * Cuándo arrancó esta ronda. Cambia cada vez que el expositor toca
+   * "Comenzar", así que identifica a la partida: el celular lo usa para saber
+   * si lo que tiene guardado es de esta ronda o de la anterior.
+   */
+  startedAt: z.string().nullable(),
   endsAt: z.string().nullable(),
   revealRanking: z.boolean(),
   playerCount: z.number().int().nonnegative(),

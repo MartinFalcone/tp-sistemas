@@ -6,6 +6,8 @@ import { QuestionStage } from "@/components/questions/QuestionStage";
 import { Button } from "@/components/ui/Button";
 import { QuestionSkeleton } from "@/components/ui/Skeleton";
 import {
+  clearProgress,
+  isFromRound,
   readProgress,
   writeProgress,
   type StoredProgress,
@@ -33,9 +35,12 @@ import { FinishedScreen } from "./FinishedScreen";
  */
 export function PlayScreen({
   playerId,
+  startedAt,
   endsAt,
 }: {
   playerId: string;
+  /** Cuándo arrancó esta ronda (`game_state.started_at`). Identifica la partida. */
+  startedAt: string | null;
   /** Deadline global de la partida (`game_state.ends_at`). */
   endsAt: string | null;
 }) {
@@ -45,14 +50,31 @@ export function PlayScreen({
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
-  const { submit, pendingCount } = useAnswerQueue();
-
   // -- Progreso guardado (solo después de montar: no hay localStorage en SSR) --
+  //
+  // Va ANTES de useAnswerQueue a propósito: los efectos corren en el orden en
+  // que se declaran los hooks, y este borra el `localStorage` de la ronda
+  // anterior antes de que la cola lo lea y lo vuelva a guardar.
   useEffect(() => {
-    setProgress(
-      readProgress() ?? { index: 0, questionId: null, startedAt: Date.now() },
-    );
-  }, []);
+    const stored = readProgress();
+    if (isFromRound(stored, startedAt)) {
+      setProgress(stored);
+      return;
+    }
+
+    // Progreso de otra ronda: no sirve, y encima deja al celular arrancando en
+    // "Terminaste". Se tira junto con la cola, cuyas respuestas son de una
+    // partida que ya no corre.
+    clearProgress();
+    setProgress({
+      index: 0,
+      questionId: null,
+      startedAt: Date.now(),
+      gameStartedAt: startedAt,
+    });
+  }, [startedAt]);
+
+  const { submit, pendingCount } = useAnswerQueue();
 
   // -- Las preguntas, una sola vez -------------------------------------------
   useEffect(() => {
@@ -118,6 +140,7 @@ export function PlayScreen({
       index: progress.index,
       questionId: current.id,
       startedAt: Date.now(),
+      gameStartedAt: progress.gameStartedAt,
     };
     writeProgress(next);
     setProgress(next);
@@ -131,6 +154,7 @@ export function PlayScreen({
         index: previous.index + 1,
         questionId: null,
         startedAt: Date.now(),
+        gameStartedAt: previous.gameStartedAt,
       };
       writeProgress(next);
       return next;

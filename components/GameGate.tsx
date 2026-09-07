@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { readStoredPlayer, type StoredPlayer } from "@/lib/player";
+import { fetchJson } from "@/lib/fetchJson";
+import {
+  readStoredPlayer,
+  writeStoredPlayer,
+  type StoredPlayer,
+} from "@/lib/player";
+import { joinResponseSchema } from "@/lib/types";
 import { useGameState } from "@/lib/useGameState";
 import { Paper, PaperHeader } from "@/components/ui/Paper";
 import { QuestionSkeleton } from "@/components/ui/Skeleton";
@@ -34,6 +40,46 @@ export function GameGate() {
   useEffect(() => {
     if (state?.status === "finished") router.replace("/ranking");
   }, [state?.status, router]);
+
+  // El `playerId` guardado es una copia de una fila de la base, y "Reiniciar
+  // todo" borra los jugadores. Después de un reinicio ese id ya no existe:
+  // /api/answer contesta 404, la cola lo toma como error permanente y lo
+  // descarta, y el alumno juega las 12 preguntas sin que se guarde ninguna, sin
+  // ver un solo error. Así que una vez por ronda se vuelve a pedir el id con el
+  // mismo apodo. /api/join es idempotente por apodo: si el jugador sigue
+  // existiendo devuelve exactamente el mismo, y si no, lo recrea.
+  const roundKey = state ? (state.startedAt ?? "lobby") : null;
+  const rejoinedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!player || roundKey === null) return;
+    if (rejoinedRef.current === roundKey) return;
+    rejoinedRef.current = roundKey;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const refreshed = await fetchJson("/api/join", {
+          method: "POST",
+          body: { nickname: player.nickname },
+          schema: joinResponseSchema,
+          timeoutMs: 10000,
+          retries: 3,
+        });
+        if (cancelled || refreshed.playerId === player.playerId) return;
+        writeStoredPlayer(refreshed);
+        setPlayer(refreshed);
+      } catch {
+        // Sin conexión se sigue con el id guardado: si todavía existe, funciona
+        // igual, y dejar a alguien afuera de la partida por esto sería peor.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [player, roundKey]);
 
   // Antes de hidratar no sabemos si hay jugador guardado. Sin este texto la
   // pantalla queda en blanco mientras baja el JS, que con datos móviles malos
@@ -68,7 +114,11 @@ export function GameGate() {
       ) : state.status === "lobby" ? (
         <WaitingRoom playerCount={state.playerCount} />
       ) : state.status === "running" ? (
-        <PlayScreen playerId={player.playerId} endsAt={state.endsAt} />
+        <PlayScreen
+          playerId={player.playerId}
+          startedAt={state.startedAt}
+          endsAt={state.endsAt}
+        />
       ) : (
         <Centered>La partida terminó. Llevándote al ranking…</Centered>
       )}

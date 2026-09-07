@@ -39,6 +39,7 @@ export async function GET(request: Request) {
 
     const body: GameStateResponse = {
       status: state.data.status,
+      startedAt: state.data.started_at,
       endsAt: state.data.ends_at,
       revealRanking: state.data.reveal_ranking,
       playerCount: players.count ?? 0,

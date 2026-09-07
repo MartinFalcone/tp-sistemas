@@ -26,6 +26,13 @@ export type StoredProgress = {
   questionId: string | null;
   /** Timestamp en ms en que se mostró la pregunta. */
   startedAt: number;
+  /**
+   * El `started_at` de la partida a la que pertenece este progreso.
+   *
+   * `undefined` es progreso de una versión anterior, que no lo guardaba: se
+   * descarta, que es exactamente lo que hay que hacer con él.
+   */
+  gameStartedAt?: string | null;
 };
 
 export type QueuedAnswer = {
@@ -77,6 +84,30 @@ export function readProgress(): StoredProgress | null {
 
 export function writeProgress(progress: StoredProgress): void {
   writeJson(PROGRESS_STORAGE_KEY, progress);
+}
+
+/**
+ * ¿Este progreso es de la ronda que está corriendo ahora?
+ *
+ * El expositor abre y cierra la partida varias veces: un ensayo, después la
+ * real. Sin esta comprobación, el celular que ya terminó una ronda arranca la
+ * siguiente directo en "Terminaste", porque su índice quedó apuntando más allá
+ * de la última pregunta y nada lo vuelve a poner en cero.
+ *
+ * `game_state.started_at` se reescribe en cada "Comenzar", así que alcanza con
+ * guardarlo al lado del progreso y comparar. Es una decisión del servidor: no
+ * depende de que el celular haya visto la transición a la sala de espera, y
+ * funciona igual si estuvo apagado durante el reinicio.
+ */
+export function isFromRound(
+  progress: StoredProgress | null,
+  gameStartedAt: string | null,
+): progress is StoredProgress {
+  return (
+    progress !== null &&
+    progress.gameStartedAt !== undefined &&
+    progress.gameStartedAt === gameStartedAt
+  );
 }
 
 export function readQueue(): QueuedAnswer[] {
