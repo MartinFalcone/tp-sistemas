@@ -454,14 +454,31 @@ function TypeFields({
       const current = draft;
       const { left, right } = current.payload;
 
-      const setPair = (leftId: string, rightId: string) =>
+      // El ítem derecho que le toca a este par. Si el par todavía no apunta a
+      // ninguno, se usa el id de la izquierda: es lo que hace addPair.
+      const targetOf = (leftId: string) => current.answer.pairs[leftId] ?? leftId;
+
+      // Texto y vínculo se escriben en UNA sola llamada: dos `update` seguidos
+      // en el mismo handler se pisan, porque los dos parten del mismo `current`.
+      const setRightText = (leftId: string, text: string) => {
+        const targetId = targetOf(leftId);
+        const exists = right.some((item) => item.id === targetId);
         update({
           ...current,
-          answer: { pairs: { ...current.answer.pairs, [leftId]: rightId } },
+          payload: {
+            left,
+            right: exists
+              ? right.map((item) => (item.id === targetId ? { ...item, text } : item))
+              : [...right, { id: targetId, text }],
+          },
+          answer: { pairs: { ...current.answer.pairs, [leftId]: targetId } },
         });
+      };
 
       const addPair = () => {
-        const id = nextId(left.map((item) => item.id));
+        // El id tiene que ser único en las DOS columnas: una pregunta sembrada
+        // trae slugs distintos de cada lado.
+        const id = nextId([...left, ...right].map((item) => item.id));
         update({
           ...current,
           payload: {
@@ -512,23 +529,8 @@ function TypeFields({
                 →
               </span>
               <input
-                value={
-                  right.find((r) => r.id === current.answer.pairs[item.id])?.text ??
-                  ""
-                }
-                onChange={(event) => {
-                  const targetId = current.answer.pairs[item.id] ?? item.id;
-                  update({
-                    ...current,
-                    payload: {
-                      left,
-                      right: right.map((r) =>
-                        r.id === targetId ? { ...r, text: event.target.value } : r,
-                      ),
-                    },
-                  });
-                  setPair(item.id, targetId);
-                }}
+                value={right.find((r) => r.id === targetOf(item.id))?.text ?? ""}
+                onChange={(event) => setRightText(item.id, event.target.value)}
                 placeholder={`Derecha ${index + 1}`}
                 className="min-h-11 min-w-0 flex-1 rounded-hoja border border-tinta bg-transparent px-2 text-base"
               />
